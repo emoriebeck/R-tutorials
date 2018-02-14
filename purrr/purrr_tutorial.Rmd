@@ -19,7 +19,6 @@ knitr::opts_chunk$set(echo = TRUE, message = F, warning = F, cache = F)
 <a href="https://github.com/emoriebeck/R-tutorials/tree/master/purrr" target="_blank">See GitHub Repository</a>  
 
 #`purrr`
-
 In my opinion, purrr is one of the most underrated and under-utilized `R` packages. 
 
 #Background: iteration
@@ -84,13 +83,13 @@ purrr is my favorite alternative to iteration. It keeps me organized by keeping 
 
 purrr can be used for many more things than I will talk about here. If you want to know more, you can check out Hadley Wickham's R for Data Science or purrr documentation. I'm going to focus on how *I* I use purrr: reading data, cleaning, running models, making tables, and making plots.  
 
-## nested data frames
+## Nested Data Frames
 Before we can learn how to use purrr, we need to understand what a nested data frame is. If you've ever worked with a list in R, you are halfway there. Basically a nested data frame takes the normal data frame you are probably familiar with and adds some new features. It still has columns, rows, and cells, but what makes up those cells isn't restrictred to numbers, strings, or logicals. Instead, you can put essentially anything you want: lists, models, data frames, plots, etc! 
 
 If that freaks you out a bit, imagine this. Imagine you are me: you work with personality data and want to use each of the Big 5 to individually predict some outcomes, like health and life satisfaction. 
 
 ```{r}
-ipip50 <- read.csv("~/Dropbox (Brown)/Spring 2018/ipip50_sample.csv", stringsAsFactors = F)
+ipip50 <- read.csv("https://raw.githubusercontent.com/emoriebeck/R-tutorials/master/purrr/ipip50_sample.csv", stringsAsFactors = F)
 
 # let's recode the exercise variable (exer)
 # 0 = "veryRarelyNever"; 1 = "less1mo"; 2 = "less1wk"; 3 = "1or2wk"; 4 = "3or5wk"; 5 = "more5wk"
@@ -146,6 +145,7 @@ Now that our data is in long format, we have a couple of options. The first is t
 
 Basically, instead of the cells in the "data" column being a single numeric, logical, or character value, each cell is a data frame! Note that the class of the "data" column is a list (hence the name "list column") and the class of each cell is a tibble. o_O Pretty cool, huh? Here's why: by putting a data frame of the data for each trait / outcome combination in a single cell, we can operate on each cell like we would a cell in a normal data frame. Sort of.
 
+## The `map()` Functions
 I say sort of because we need another function, this time from the `purrr` package (yay!) called `map()`. Now my purpose here isn't to go through every possible way you can use this. If you want to learn more of the ins and outs see http://r4ds.had.co.nz/many-models.html.  My goal is to show you how I, a psychology grad student, uses purrr every. single. day. in my research.
 
 What we want to do is to run a model using personality to predict our outcomes for each combination of trait and outcome. Now that we have a data frame for each nested in a data frame, we're ready to do that. Here's how.  
@@ -168,6 +168,7 @@ Watch:
   mutate(tidy = map(model, broom::tidy)))
 ```
 
+## Unnesting
 Using the `tidy()` function from the `broom` package, we now have another column. Again, the column's class is "list" but the cell's class is "data.frame". How can we use this? Well, the `nest()` function we used earlier has a sibling called `unnest()`. It does the opposite of `nest()`; it takes our list columns and expands it. So, since we have 2 x 5 data frame in each cell of the "tidy" column, when we unnest it, there will be rows for each Trait and outcome combination (where there was only 1 in the nested data frame). This will make more sense with a demonstration:
 
 ```{r}
@@ -198,6 +199,7 @@ We aren't quite done yet. This table would never make it in a publication. Enter
 tab %>% select(-Trait) %>%
   kable(., "html", booktabs = T, escape = F, digits = 2,
         col.names = c("Term", rep(c("b", "SE"), times = 3))) %>%
+  kable_styling(full_width = F) %>%
   column_spec(2:7, width = "2cm") %>%
   group_rows("Agreeableness",1,2) %>%
   group_rows("Conscientiousness",3,4) %>%
