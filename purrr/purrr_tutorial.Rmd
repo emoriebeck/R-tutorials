@@ -3,7 +3,6 @@ title: "Intro to `purrr`"
 author: "Emorie D Beck"
 output:
   html_document:
-    number_sections: yes
     theme: united
     highlight: tango
     df_print: paged
@@ -11,6 +10,10 @@ output:
     toc: true
     toc_float: true
 ---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = F, warning = F, cache = F)
+```
 
 #`purrr`
 In my opinion, purrr is one of the most underrated and under-utilized `R` packages. 
@@ -191,6 +194,7 @@ We aren't quite done yet. This table would never make it in a publication. Enter
 tab %>% select(-Trait) %>%
   kable(., "html", booktabs = T, escape = F, digits = 2,
         col.names = c("Term", rep(c("b", "SE"), times = 3))) %>%
+  kable_styling(full_width = F) %>%
   column_spec(2:7, width = "2cm") %>%
   group_rows("Agreeableness",1,2) %>%
   group_rows("Conscientiousness",3,4) %>%
@@ -282,7 +286,7 @@ plot_fun <- function(df, outcome){
   df %>%
     mutate(outcome = outcome) %>%
     ggplot(aes(x = t.value, y = pred, color = Trait)) +
-    geom_line() +
+    geom_line(size = 2) +
     labs(y = NULL, x = "Personality Rating (1-7)") +
     facet_wrap(~outcome) +
     theme_classic() +
