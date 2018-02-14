@@ -15,6 +15,9 @@ output:
 knitr::opts_chunk$set(echo = TRUE, message = F, warning = F, cache = F)
 ```
 
+<a href="https://raw.githubusercontent.com/emoriebeck/R-tutorials/master/purrr/purrr_tutorial.Rmd" download>Download .Rmd (won't work in Safari or IE)</a>  
+<a href="https://github.com/emoriebeck/R-tutorials/tree/master/purrr" target="_blank">See GitHub Repository</a>  
+
 #`purrr`
 In my opinion, purrr is one of the most underrated and under-utilized `R` packages. 
 
