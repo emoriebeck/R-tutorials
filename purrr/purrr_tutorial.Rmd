@@ -1,0 +1,300 @@
+---
+title: "Intro to `purrr`"
+author: "Emorie D Beck"
+output:
+  html_document:
+    number_sections: yes
+    theme: united
+    highlight: tango
+    df_print: paged
+    code_folding: show
+    toc: true
+    toc_float: true
+---
+
+#`purrr`
+In my opinion, purrr is one of the most underrated and under-utilized `R` packages. 
+
+#Background: iteration
+Iteration is everywhere. It underpins much of mathematics and statistics. If you've ever seen the $\Sigma$ symbol, then you've seen (and probably used) iteration. 
+
+It's also incredibly useful. Anytime you have to repeat some sort of action many times, iteration is your best friend. In psychology, this often means reading in a bunch of individual data files from an experiment, repeating an analysis with a series of different predictors or outcomes, or creating a series of figures. 
+
+```{r}
+library(psych)
+library(knitr)
+library(kableExtra)
+library(gridExtra)
+library(plyr)
+library(tidyverse)
+```
+
+
+Enter `for` loops. `for` loops are the "OG" form of iteration in computer science. The basic syntax is below. Basically, we can use a for loop to loop through and print a series of things.
+
+```{r}
+for(i in letters[1:5]){
+  print(i)
+}
+```
+
+You can also use it to read data files:
+
+```{r, eval = F}
+data_path <- ""
+files <- list.files(data_path)
+data <- list()
+for(i in files){
+  data[[i]] <- read.csv(i, stringsAsFactors = F)
+}
+data <- combine(data)
+```
+
+The loop above defines the path of the data, reads all the files in that path, creates an empty list to store the data files, loops through each of the files individually and saves them into the list, and combines each of the read data files into a single data frame.  
+
+This is all well and good and would work just fine. But what happens if you have multiple data files for different subjects if, say, they complete a writing task and a memory task? Or maybe you work with longitudinal data, like I do, and frequently have multiple data files for a given year for different categories (e.g. health, psychological, etc.). In that case, the loop above might not work. The files might have different properties or be stored in different locations (for your own sanity).  
+
+```{r}
+data_path <- ""
+directories <- list.files(data_path)
+files <- c("health", "person")
+data <- data.frame
+for(i in directories){
+  for(k in files){
+    tmp <- read.csv(sprintf("%s/%s/%s.csv", data_path, i, k), stringsAsFactors = F)
+    tmp$file <- k
+    data <- bind_rows(data, tmp)
+  }
+}
+```
+
+In this case, it's a little more complicated. First, our method for loading each of the files into a list doesn't work nicely here because we are iterating through 2 variables. As a result, we have to save each file into an object called "tmp" that then must be joined with data from previous iterations. The downside of this is that we have to use a sort of "brute-force" method to do so, which is not ideal. Things go wrong with data collection quite often, meaning that files are likely to have different columns. Third, when a loop fails, it refuses to continue. And you are left with a couple of variables (i and k) and have to try to work backward to figure out what is going wrong.  
+
+Sound annoying? Enter purrr.  
+
+#The purrr solution
+purrr is my favorite alternative to iteration. It keeps me organized by keeping everything together in a single object. It works nicely with functions like `possibly()` and `safely()` that catch and handle errors. 
+
+purrr can be used for many more things than I will talk about here. If you want to know more, you can check out Hadley Wickham's R for Data Science or purrr documentation. I'm going to focus on how *I* I use purrr: reading data, cleaning, running models, making tables, and making plots.  
+
+## nested data frames
+Before we can learn how to use purrr, we need to understand what a nested data frame is. If you've ever worked with a list in R, you are halfway there. Basically a nested data frame takes the normal data frame you are probably familiar with and adds some new features. It still has columns, rows, and cells, but what makes up those cells isn't restrictred to numbers, strings, or logicals. Instead, you can put essentially anything you want: lists, models, data frames, plots, etc! 
+
+If that freaks you out a bit, imagine this. Imagine you are me: you work with personality data and want to use each of the Big 5 to individually predict some outcomes, like health and life satisfaction. 
+
+```{r}
+ipip50 <- read.csv("~/Dropbox (Brown)/Spring 2018/ipip50_sample.csv", stringsAsFactors = F)
+
+# let's recode the exercise variable (exer)
+# 0 = "veryRarelyNever"; 1 = "less1mo"; 2 = "less1wk"; 3 = "1or2wk"; 4 = "3or5wk"; 5 = "more5wk"
+ipip50 <- ipip50 %>% 
+  mutate(exer = mapvalues(exer, unique(exer), c(3,4,0,5,2,1)))
+
+```
+
+
+The really bad solution would be to write the code to model these data, make a table of the results, and make a plot. Then you would copy and paste that code 9 times to do the same steps for the other trait-outcome pairs, changing the key variables. Sometime later, you could run those individually.
+
+A better solution would be a loop, where you use a nested loop to complete the steps for each trait-outcome pair. How you store these values can be a little wonky and often involes a bunch of different lists or a cluttered global environment with losts of objects.   
+
+But the best solution is purrr. What does this look like? Well, we start with a nested data frame:
+
+```{r}
+df <- expand.grid(
+  Trait = c("E", "A", "C", "N", "O"),
+  Outcome = c("BMI", "logMediInc", "exer"),
+  stringsAsFactors = F
+) %>%
+  tbl_df
+
+df
+```
+
+To do this, we use a useful little function called `expand_grid()`, which basically takes what you give it and returns a data frame with all combinations of the variables. There is no limit to the number of columns this can have. Here, we feed it "Trait", which contains a vector of the Big 5, and "Outcome", which contains a vector of our outcomes, which results in a data frame with 2 columns and 10 rows. 
+
+Now that we have that, we are almost ready to start modeling, tabling, and plotting our data. First, though, we need to make sure our data is ready. I've found that the easiest way to work with data with purrr is to first convert your data to long form, where all the columns in your `expand_grid()` data frame are represented in long form. This will allow us to use consistent variable names in formulas and functions and to feed the correct data into different programs using the `dplyr` helper function `filter()`.
+
+So let's take our Big 5 data and do that.
+
+```{r}
+# Let's make the trait data long and create composites
+(ipip50_composites <- ipip50 %>%
+  gather(key = item, value = value, A_1:O_10) %>%
+  separate(item, c("Trait", "item"), sep = "_") %>%
+  group_by(RID, gender, age, BMI, exer, logMedInc, Trait) %>%
+  summarise(t.value = mean(value, na.rm = T)))
+
+# Now let's make the outcomes long
+ipip50_composites <- ipip50_composites %>%
+  gather(key = outcome, value = o.value, BMI:logMedInc) 
+```
+
+Now that our data is in long format, we have a couple of options. The first is to use the `nest()` function from the `tidyr` package to chunk our data by trait and outcome. This will result in a data frame with 3 columns: 1 that indexes the Trait, one that indexes the Outcome, and one that indexes the data for that trait and outcome combination. 
+
+```{r}
+(ipip50_nested <- ipip50_composites %>% 
+  group_by(Trait, outcome) %>%
+  nest())
+```
+
+Basically, instead of the cells in the "data" column being a single numeric, logical, or character value, each cell is a data frame! Note that the class of the "data" column is a list (hence the name "list column") and the class of each cell is a tibble. o_O Pretty cool, huh? Here's why: by putting a data frame of the data for each trait / outcome combination in a single cell, we can operate on each cell like we would a cell in a normal data frame. Sort of.
+
+I say sort of because we need another function, this time from the `purrr` package (yay!) called `map()`. Now my purpose here isn't to go through every possible way you can use this. If you want to learn more of the ins and outs see http://r4ds.had.co.nz/many-models.html.  My goal is to show you how I, a psychology grad student, uses purrr every. single. day. in my research.
+
+What we want to do is to run a model using personality to predict our outcomes for each combination of trait and outcome. Now that we have a data frame for each nested in a data frame, we're ready to do that. Here's how.  
+
+```{r}
+(ipip50_nested <- ipip50_nested %>%
+  mutate(model = map(data, ~lm(o.value ~ t.value, data = .))))
+```
+
+What's going on there? Well, we're using `mutate()` from dplyr to create a new column in our data frame called "model." Then, we use the `map()` function to tell it that we want to take each of the cells in the "data" column and run a linear model predicting our outcomes (o.value) from personality (t.value). The "data = ." part follows because we are within a `dplyr` pipe.  
+
+As you can see, this results in a new column called "model." As with the data column, the class of the "model" column is a list, and the class of any individual cell in the column is the S3 class "lm", which just means linear model.  
+
+Now, this is definitely a fast way to run a lot of models, but thus far, this isn't better than a for loop. But our nested data frame can way outperform a for loop. We don't run models just for the sake of doing so. We want to extract the information and report it, often in either a table or figure. With `map()` and `purrr`, we can create a table and figure for each model and *store it in our data frame*. No more dealing with clunky lists whose contents is hard to access or seemingly infinite numbers of objects cluttering your environment. It's all stored in ONE DATA FRAME. (Sorry to shout, but I think the advantages of this cannot be overstated.)
+
+Watch:
+
+```{r}
+(ipip50_nested <- ipip50_nested %>%
+  mutate(tidy = map(model, broom::tidy)))
+```
+
+Using the `tidy()` function from the `broom` package, we now have another column. Again, the column's class is "list" but the cell's class is "data.frame". How can we use this? Well, the `nest()` function we used earlier has a sibling called `unnest()`. It does the opposite of `nest()`; it takes our list columns and expands it. So, since we have 2 x 5 data frame in each cell of the "tidy" column, when we unnest it, there will be rows for each Trait and outcome combination (where there was only 1 in the nested data frame). This will make more sense with a demonstration:
+
+```{r}
+ipip50_nested %>%
+  unnest(tidy, .drop = T)
+```
+
+Pretty neat, huh? From here, we may want to do a bunch of different things. And `purrr` is our friend for all of them. I'm going to do a few below, just to show you your options.
+
+## Create a Table
+When we have multiple predictors and outcomes, we typically want to smash all this info into a single table, with predictors as different rows of the table and outcomes as different columns (or vice versa). We typically include both an estimate and a confidence interval or standard error for each term in the model (in our case Intercept and t.value).
+
+Let's create a table with different columns for each of the outcomes, and different rows for each trait:
+
+```{r}
+(tab <- ipip50_nested %>%
+  unnest(tidy, .drop = T) %>%
+  select(Trait:std.error) %>%
+  rename(b = estimate, SE = std.error) %>%
+  gather(key = tmp, value = value, b, SE) %>%
+  unite(tmp, outcome, tmp, sep = ".") %>%
+  spread(key = tmp, value = value))
+```
+
+We aren't quite done yet. This table would never make it in a publication. Enter `kable()` + `kableExtra`.
+
+```{r, results = 'asis'}
+tab %>% select(-Trait) %>%
+  kable(., "html", booktabs = T, escape = F, digits = 2,
+        col.names = c("Term", rep(c("b", "SE"), times = 3))) %>%
+  column_spec(2:7, width = "2cm") %>%
+  group_rows("Agreeableness",1,2) %>%
+  group_rows("Conscientiousness",3,4) %>%
+  group_rows("Extraversion",5,6) %>%
+  group_rows("Neuroticism",7,8) %>%
+  group_rows("Openness",9,10) %>%
+  add_header_above(c(" " = 1, "BMI" = 2, "Exercise" = 2, "Log Median Income" = 2))
+```
+
+Now I would usually get fancy and bold or flag significant values. I would also use confidence intervals rather than standard errors and add some additional rows with some model summary terms (e.g. $R^2$). If you want to see that, I'll refer you to my github.  
+
+## Plots
+
+### One Big Plot
+Sometimes, we want one big plot that shows all our results. What kind of plot? You have choice. Line graphs are popular, but they are perhaps overly simple for these simple linear relationships. We'd also have to go back and get predicted values, which is helpful, but again I'll refer you to my github for more on that. Instead, we're going to create a forest plot, which is useful for determining which terms are different than 0 and how those relate to other terms. We can do this for both our model terms (Intercept and t.value), but I'm going to restrict us to t.value, which tells us how a 1 point increase in a personality characteristic is associated with an outcome.
+
+```{r}
+ipip50_nested %>%
+  unnest(tidy, .drop = T) %>%
+  filter(term == "t.value") %>%
+  ggplot(aes(x = Trait, y = estimate)) +
+    geom_hline(aes(yintercept = 0), linetype = "dashed") +
+    geom_errorbar(aes(ymin = estimate - std.error, ymax = estimate + std.error),
+                  width = .1) +
+    geom_point(aes(color = Trait), size = 3) +
+    coord_flip() +
+    facet_wrap(~outcome, scale = "free") +
+    theme_classic() +
+    theme(legend.position = "none")
+```
+
+Pretty cool. We see that personality predicts exercise pretty much across the board, but that it does not predict BMI. Only Openness predicts log Median Income.
+
+But here's where we pat ourselves on the back. We got from nesting our data to the plot above in FIFTEEN LINES OF CODE. Without purrr, it would take us that many lines just to run our models. Then we'd still need to tidy them, join them back together, and plot. I don't want to do that. Or we could use a loop, and create a weird series of lists or a cluttered environment. No thank you on all accounts.  
+
+### Predicted Values
+But you will encounter times when you want to do predicted values. There are a number of ways to go about this (and both of these ignore that you can just use `geom_smooth()` in the `ggplot2` package with method = "lm" for simple linear models). I'm going to show you 2 purrrfect ways. Because demonstrations.  
+#### Single Plots
+First, let's get predicted values for each model. We'll use `expand.grid()` to get the full range of values for each personality traits (1 to 7) and then use the `predict()` function to get the predicted values, setting the "newdata" argument to the newly created range of personality values.  
+
+```{r}
+pred_fun <- function(mod){
+  expand.grid(
+    t.value = seq(1,7,.25)
+  ) %>%
+    tbl_df %>%
+    mutate(pred = predict(mod, newdata = .))
+}
+
+(ipip50_nested <- ipip50_nested %>%
+  mutate(pred = map(model, pred_fun)))
+```
+
+Now, let's take those predicted values and use them to make individual plots.  
+```{r}
+plot_fun <- function(df, trait, outcome){
+  df %>%
+    ggplot(aes(x = t.value, y = pred)) +
+      geom_line() +
+      labs(x = trait, y = outcome) +
+      theme_classic()
+}
+
+(ipip50_nested <- ipip50_nested %>%
+  mutate(plot = pmap(list(pred, Trait, outcome), plot_fun)))
+```
+
+Let's take a look at how this plot actually looks:  
+```{r}
+ipip50_nested$plot[[1]]
+```
+
+Meh, not a fan. Let's do better and combine prediction lines across traits within outcomes. We'll do this two ways: (1) separately for each outcome and (2) using facets across all outcomes.  
+
+```{r}
+ipip50_nested %>%
+  unnest(pred) %>%
+  ggplot(aes(x = t.value, y = pred, color = Trait)) +
+    geom_line(size = 2) +
+    facet_wrap(~outcome, scale = "free") +
+    theme_classic() +
+    theme(legend.position = "bottom")
+```
+
+Meh, this is fine, but the scales off. This is what I'd call a "wow graph" because it exaggerates the differences.  
+
+```{r}
+plot_fun <- function(df, outcome){
+  df %>%
+    mutate(outcome = outcome) %>%
+    ggplot(aes(x = t.value, y = pred, color = Trait)) +
+    geom_line() +
+    labs(y = NULL, x = "Personality Rating (1-7)") +
+    facet_wrap(~outcome) +
+    theme_classic() +
+    theme(legend.position = "bottom")
+}
+
+(plots <- ipip50_nested %>%
+  unnest(pred) %>%
+  group_by(outcome) %>%
+  nest() %>%
+  mutate(plot = map2(data, outcome, plot_fun)))
+
+do.call("grid.arrange", list(grobs = plots$plot, nrow = 1))
+```
+
