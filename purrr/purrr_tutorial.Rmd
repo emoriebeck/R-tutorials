@@ -83,7 +83,7 @@ Before we can learn how to use purrr, we need to understand what a nested data f
 If that freaks you out a bit, imagine this. Imagine you are me: you work with personality data and want to use each of the Big 5 to individually predict some outcomes, like health and life satisfaction. 
 
 ```{r}
-ipip50 <- read.csv("~/Dropbox (Brown)/Spring 2018/ipip50_sample.csv", stringsAsFactors = F)
+ipip50 <- read.csv("https://raw.githubusercontent.com/emoriebeck/R-tutorials/master/purrr/ipip50_sample.csv", stringsAsFactors = F)
 
 # let's recode the exercise variable (exer)
 # 0 = "veryRarelyNever"; 1 = "less1mo"; 2 = "less1wk"; 3 = "1or2wk"; 4 = "3or5wk"; 5 = "more5wk"
