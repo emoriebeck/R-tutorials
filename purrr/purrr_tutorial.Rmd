@@ -3,7 +3,6 @@ title: "Intro to `purrr`"
 author: "Emorie D Beck"
 output:
   html_document:
-    number_sections: yes
     theme: united
     highlight: tango
     df_print: paged
