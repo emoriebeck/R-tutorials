@@ -12,6 +12,10 @@ output:
     toc_float: true
 ---
 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = F, warning = F, cache = F)
+```
+
 #`purrr`
 In my opinion, purrr is one of the most underrated and under-utilized `R` packages. 
 
@@ -282,7 +286,7 @@ plot_fun <- function(df, outcome){
   df %>%
     mutate(outcome = outcome) %>%
     ggplot(aes(x = t.value, y = pred, color = Trait)) +
-    geom_line() +
+    geom_line(size = 2) +
     labs(y = NULL, x = "Personality Rating (1-7)") +
     facet_wrap(~outcome) +
     theme_classic() +
