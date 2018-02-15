@@ -273,11 +273,11 @@ div.tocify {
 <p><a href="https://raw.githubusercontent.com/emoriebeck/R-tutorials/master/purrr/purrr_tutorial.Rmd" download>Download .Rmd (won’t work in Safari or IE)</a><br />
 <a href="https://github.com/emoriebeck/R-tutorials/tree/master/purrr" target="_blank">See GitHub Repository</a></p>
 <div id="purrr" class="section level1">
-<h1><span class="header-section-number">1</span> <code>purrr</code></h1>
+<h1><code>purrr</code></h1>
 <p>In my opinion, purrr is one of the most underrated and under-utilized <code>R</code> packages.</p>
 </div>
 <div id="background-iteration" class="section level1">
-<h1><span class="header-section-number">2</span> Background: iteration</h1>
+<h1>Background: iteration</h1>
 <p>Iteration is everywhere. It underpins much of mathematics and statistics. If you’ve ever seen the <span class="math inline">\(\Sigma\)</span> symbol, then you’ve seen (and probably used) iteration.</p>
 <p>It’s also incredibly useful. Anytime you have to repeat some sort of action many times, iteration is your best friend. In psychology, this often means reading in a bunch of individual data files from an experiment, repeating an analysis with a series of different predictors or outcomes, or creating a series of figures.</p>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">library</span>(psych)
@@ -320,14 +320,14 @@ data &lt;-<span class="st"> </span>data.frame
 <p>Sound annoying? Enter purrr.</p>
 </div>
 <div id="the-purrr-solution" class="section level1">
-<h1><span class="header-section-number">3</span> The purrr solution</h1>
+<h1>The purrr solution</h1>
 <p>purrr is my favorite alternative to iteration. It keeps me organized by keeping everything together in a single object. It works nicely with functions like <code>possibly()</code> and <code>safely()</code> that catch and handle errors.</p>
 <p>purrr can be used for many more things than I will talk about here. If you want to know more, you can check out Hadley Wickham’s R for Data Science or purrr documentation. I’m going to focus on how <em>I</em> I use purrr: reading data, cleaning, running models, making tables, and making plots.</p>
 <div id="nested-data-frames" class="section level2">
-<h2><span class="header-section-number">3.1</span> nested data frames</h2>
+<h2>Nested Data Frames</h2>
 <p>Before we can learn how to use purrr, we need to understand what a nested data frame is. If you’ve ever worked with a list in R, you are halfway there. Basically a nested data frame takes the normal data frame you are probably familiar with and adds some new features. It still has columns, rows, and cells, but what makes up those cells isn’t restrictred to numbers, strings, or logicals. Instead, you can put essentially anything you want: lists, models, data frames, plots, etc!</p>
 <p>If that freaks you out a bit, imagine this. Imagine you are me: you work with personality data and want to use each of the Big 5 to individually predict some outcomes, like health and life satisfaction.</p>
-<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">ipip50 &lt;-<span class="st"> </span><span class="kw">read.csv</span>(<span class="st">&quot;~/Dropbox (Brown)/Spring 2018/ipip50_sample.csv&quot;</span>, <span class="dt">stringsAsFactors =</span> F)
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">ipip50 &lt;-<span class="st"> </span><span class="kw">read.csv</span>(<span class="st">&quot;https://raw.githubusercontent.com/emoriebeck/R-tutorials/master/purrr/ipip50_sample.csv&quot;</span>, <span class="dt">stringsAsFactors =</span> F)
 
 <span class="co"># let's recode the exercise variable (exer)</span>
 <span class="co"># 0 = &quot;veryRarelyNever&quot;; 1 = &quot;less1mo&quot;; 2 = &quot;less1wk&quot;; 3 = &quot;1or2wk&quot;; 4 = &quot;3or5wk&quot;; 5 = &quot;more5wk&quot;</span>
@@ -335,22 +335,21 @@ ipip50 &lt;-<span class="st"> </span>ipip50 <span class="op">%&gt;%</span><span 
 <span class="st">  </span><span class="kw">mutate</span>(<span class="dt">exer =</span> <span class="kw">mapvalues</span>(exer, <span class="kw">unique</span>(exer), <span class="kw">c</span>(<span class="dv">3</span>,<span class="dv">4</span>,<span class="dv">0</span>,<span class="dv">5</span>,<span class="dv">2</span>,<span class="dv">1</span>)))</code></pre></div>
 <p>The really bad solution would be to write the code to model these data, make a table of the results, and make a plot. Then you would copy and paste that code 9 times to do the same steps for the other trait-outcome pairs, changing the key variables. Sometime later, you could run those individually.</p>
 <p>A better solution would be a loop, where you use a nested loop to complete the steps for each trait-outcome pair. How you store these values can be a little wonky and often involes a bunch of different lists or a cluttered global environment with losts of objects.</p>
-<p>But the best solution is purrr. What does this look like? Well, we start with a nested data frame:</p>
-<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">df &lt;-<span class="st"> </span><span class="kw">expand.grid</span>(
+<p>But the best solution is purrr. What does this look like? Well, we start with a nested data frame. To do that, we need to make sure our data is ready. I’ve found that the easiest way to work with data with purrr is to first convert your data to long form, where we want to have columns for all the variable we would want to iterate through in a loop. To help you understand what that means and looks like, I think it’s useful to start with a non-nested data frame created by the <code>expand.grid()</code> function.</p>
+<p>Basically, <code>expand.grid()</code> takes what you give it and returns a data frame with all combinations of the variables. There is no limit to the number of columns this can have. Here, we feed it “Trait”, which contains a vector of the Big 5, and “Outcome”, which contains a vector of our outcomes, which results in a data frame with 2 columns and 10 rows.</p>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">(df &lt;-<span class="st"> </span><span class="kw">expand.grid</span>(
   <span class="dt">Trait =</span> <span class="kw">c</span>(<span class="st">&quot;E&quot;</span>, <span class="st">&quot;A&quot;</span>, <span class="st">&quot;C&quot;</span>, <span class="st">&quot;N&quot;</span>, <span class="st">&quot;O&quot;</span>),
   <span class="dt">Outcome =</span> <span class="kw">c</span>(<span class="st">&quot;BMI&quot;</span>, <span class="st">&quot;logMediInc&quot;</span>, <span class="st">&quot;exer&quot;</span>),
   <span class="dt">stringsAsFactors =</span> F
 ) <span class="op">%&gt;%</span>
-<span class="st">  </span>tbl_df
-
-df</code></pre></div>
+<span class="st">  </span>tbl_df)</code></pre></div>
 <div data-pagedtable="false">
 <script data-pagedtable-source type="application/json">
 {"columns":[{"label":["Trait"],"name":[1],"type":["chr"],"align":["left"]},{"label":["Outcome"],"name":[2],"type":["chr"],"align":["left"]}],"data":[{"1":"E","2":"BMI"},{"1":"A","2":"BMI"},{"1":"C","2":"BMI"},{"1":"N","2":"BMI"},{"1":"O","2":"BMI"},{"1":"E","2":"logMediInc"},{"1":"A","2":"logMediInc"},{"1":"C","2":"logMediInc"},{"1":"N","2":"logMediInc"},{"1":"O","2":"logMediInc"},{"1":"E","2":"exer"},{"1":"A","2":"exer"},{"1":"C","2":"exer"},{"1":"N","2":"exer"},{"1":"O","2":"exer"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
   </script>
 </div>
-<p>To do this, we use a useful little function called <code>expand_grid()</code>, which basically takes what you give it and returns a data frame with all combinations of the variables. There is no limit to the number of columns this can have. Here, we feed it “Trait”, which contains a vector of the Big 5, and “Outcome”, which contains a vector of our outcomes, which results in a data frame with 2 columns and 10 rows.</p>
-<p>Now that we have that, we are almost ready to start modeling, tabling, and plotting our data. First, though, we need to make sure our data is ready. I’ve found that the easiest way to work with data with purrr is to first convert your data to long form, where all the columns in your <code>expand_grid()</code> data frame are represented in long form. This will allow us to use consistent variable names in formulas and functions and to feed the correct data into different programs using the <code>dplyr</code> helper function <code>filter()</code>.</p>
+<p>One cool thing this will allow us to do is to use consistent variable names in formulas and functions and to feed the correct data into different programs using the <code>dplyr</code> helper function <code>filter()</code>. You can use expand grid with purrr functions without nesting any data in the data frame (in fact, I do this a lot because I work with large data sets and lots of combinations), but I’m going to show you the nested data frame route in this case and refer you to my GitHub for when and how you would use the <code>expand.grid()</code> approach.</p>
+<p>Back to nested data frames. We want to end up with a data frame that has the same columns as the <code>expand.grid()</code> data frame except that we want an additional column that holds the data for each trait-outcome pair. To do this, we need to have a column that indexes both trait and outcome. To get this, we change our data to the “tidy” format using <code>gather()</code> in the <code>tidyr</code> package.</p>
 <p>So let’s take our Big 5 data and do that.</p>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="co"># Let's make the trait data long and create composites</span>
 (ipip50_composites &lt;-<span class="st"> </span>ipip50 <span class="op">%&gt;%</span>
@@ -376,6 +375,9 @@ ipip50_composites &lt;-<span class="st"> </span>ipip50_composites <span class="o
   </script>
 </div>
 <p>Basically, instead of the cells in the “data” column being a single numeric, logical, or character value, each cell is a data frame! Note that the class of the “data” column is a list (hence the name “list column”) and the class of each cell is a tibble. o_O Pretty cool, huh? Here’s why: by putting a data frame of the data for each trait / outcome combination in a single cell, we can operate on each cell like we would a cell in a normal data frame. Sort of.</p>
+</div>
+<div id="the-map-functions" class="section level2">
+<h2>The <code>map()</code> Functions</h2>
 <p>I say sort of because we need another function, this time from the <code>purrr</code> package (yay!) called <code>map()</code>. Now my purpose here isn’t to go through every possible way you can use this. If you want to learn more of the ins and outs see <a href="http://r4ds.had.co.nz/many-models.html" class="uri">http://r4ds.had.co.nz/many-models.html</a>. My goal is to show you how I, a psychology grad student, uses purrr every. single. day. in my research.</p>
 <p>What we want to do is to run a model using personality to predict our outcomes for each combination of trait and outcome. Now that we have a data frame for each nested in a data frame, we’re ready to do that. Here’s how.</p>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">(ipip50_nested &lt;-<span class="st"> </span>ipip50_nested <span class="op">%&gt;%</span>
@@ -396,6 +398,9 @@ ipip50_composites &lt;-<span class="st"> </span>ipip50_composites <span class="o
 {"columns":[{"label":["Trait"],"name":[1],"type":["chr"],"align":["left"]},{"label":["outcome"],"name":[2],"type":["chr"],"align":["left"]},{"label":["data"],"name":[3],"type":["list"],"align":["right"]},{"label":["model"],"name":[4],"type":["list"],"align":["right"]},{"label":["tidy"],"name":[5],"type":["list"],"align":["right"]}],"data":[{"1":"A","2":"BMI","3":"<tibble>","4":"<S3: lm>","5":"<data.frame [2 × 5]>"},{"1":"C","2":"BMI","3":"<tibble>","4":"<S3: lm>","5":"<data.frame [2 × 5]>"},{"1":"E","2":"BMI","3":"<tibble>","4":"<S3: lm>","5":"<data.frame [2 × 5]>"},{"1":"N","2":"BMI","3":"<tibble>","4":"<S3: lm>","5":"<data.frame [2 × 5]>"},{"1":"O","2":"BMI","3":"<tibble>","4":"<S3: lm>","5":"<data.frame [2 × 5]>"},{"1":"A","2":"exer","3":"<tibble>","4":"<S3: lm>","5":"<data.frame [2 × 5]>"},{"1":"C","2":"exer","3":"<tibble>","4":"<S3: lm>","5":"<data.frame [2 × 5]>"},{"1":"E","2":"exer","3":"<tibble>","4":"<S3: lm>","5":"<data.frame [2 × 5]>"},{"1":"N","2":"exer","3":"<tibble>","4":"<S3: lm>","5":"<data.frame [2 × 5]>"},{"1":"O","2":"exer","3":"<tibble>","4":"<S3: lm>","5":"<data.frame [2 × 5]>"},{"1":"A","2":"logMedInc","3":"<tibble>","4":"<S3: lm>","5":"<data.frame [2 × 5]>"},{"1":"C","2":"logMedInc","3":"<tibble>","4":"<S3: lm>","5":"<data.frame [2 × 5]>"},{"1":"E","2":"logMedInc","3":"<tibble>","4":"<S3: lm>","5":"<data.frame [2 × 5]>"},{"1":"N","2":"logMedInc","3":"<tibble>","4":"<S3: lm>","5":"<data.frame [2 × 5]>"},{"1":"O","2":"logMedInc","3":"<tibble>","4":"<S3: lm>","5":"<data.frame [2 × 5]>"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
   </script>
 </div>
+</div>
+<div id="unnesting" class="section level2">
+<h2>Unnesting</h2>
 <p>Using the <code>tidy()</code> function from the <code>broom</code> package, we now have another column. Again, the column’s class is “list” but the cell’s class is “data.frame”. How can we use this? Well, the <code>nest()</code> function we used earlier has a sibling called <code>unnest()</code>. It does the opposite of <code>nest()</code>; it takes our list columns and expands it. So, since we have 2 x 5 data frame in each cell of the “tidy” column, when we unnest it, there will be rows for each Trait and outcome combination (where there was only 1 in the nested data frame). This will make more sense with a demonstration:</p>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">ipip50_nested <span class="op">%&gt;%</span>
 <span class="st">  </span><span class="kw">unnest</span>(tidy, <span class="dt">.drop =</span> T)</code></pre></div>
@@ -407,7 +412,7 @@ ipip50_composites &lt;-<span class="st"> </span>ipip50_composites <span class="o
 <p>Pretty neat, huh? From here, we may want to do a bunch of different things. And <code>purrr</code> is our friend for all of them. I’m going to do a few below, just to show you your options.</p>
 </div>
 <div id="create-a-table" class="section level2">
-<h2><span class="header-section-number">3.2</span> Create a Table</h2>
+<h2>Create a Table</h2>
 <p>When we have multiple predictors and outcomes, we typically want to smash all this info into a single table, with predictors as different rows of the table and outcomes as different columns (or vice versa). We typically include both an estimate and a confidence interval or standard error for each term in the model (in our case Intercept and t.value).</p>
 <p>Let’s create a table with different columns for each of the outcomes, and different rows for each trait:</p>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">(tab &lt;-<span class="st"> </span>ipip50_nested <span class="op">%&gt;%</span>
@@ -426,6 +431,7 @@ ipip50_composites &lt;-<span class="st"> </span>ipip50_composites <span class="o
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">tab <span class="op">%&gt;%</span><span class="st"> </span><span class="kw">select</span>(<span class="op">-</span>Trait) <span class="op">%&gt;%</span>
 <span class="st">  </span><span class="kw">kable</span>(., <span class="st">&quot;html&quot;</span>, <span class="dt">booktabs =</span> T, <span class="dt">escape =</span> F, <span class="dt">digits =</span> <span class="dv">2</span>,
         <span class="dt">col.names =</span> <span class="kw">c</span>(<span class="st">&quot;Term&quot;</span>, <span class="kw">rep</span>(<span class="kw">c</span>(<span class="st">&quot;b&quot;</span>, <span class="st">&quot;SE&quot;</span>), <span class="dt">times =</span> <span class="dv">3</span>))) <span class="op">%&gt;%</span>
+<span class="st">  </span><span class="kw">kable_styling</span>(<span class="dt">full_width =</span> F) <span class="op">%&gt;%</span>
 <span class="st">  </span><span class="kw">column_spec</span>(<span class="dv">2</span><span class="op">:</span><span class="dv">7</span>, <span class="dt">width =</span> <span class="st">&quot;2cm&quot;</span>) <span class="op">%&gt;%</span>
 <span class="st">  </span><span class="kw">group_rows</span>(<span class="st">&quot;Agreeableness&quot;</span>,<span class="dv">1</span>,<span class="dv">2</span>) <span class="op">%&gt;%</span>
 <span class="st">  </span><span class="kw">group_rows</span>(<span class="st">&quot;Conscientiousness&quot;</span>,<span class="dv">3</span>,<span class="dv">4</span>) <span class="op">%&gt;%</span>
@@ -433,7 +439,7 @@ ipip50_composites &lt;-<span class="st"> </span>ipip50_composites <span class="o
 <span class="st">  </span><span class="kw">group_rows</span>(<span class="st">&quot;Neuroticism&quot;</span>,<span class="dv">7</span>,<span class="dv">8</span>) <span class="op">%&gt;%</span>
 <span class="st">  </span><span class="kw">group_rows</span>(<span class="st">&quot;Openness&quot;</span>,<span class="dv">9</span>,<span class="dv">10</span>) <span class="op">%&gt;%</span>
 <span class="st">  </span><span class="kw">add_header_above</span>(<span class="kw">c</span>(<span class="st">&quot; &quot;</span> =<span class="st"> </span><span class="dv">1</span>, <span class="st">&quot;BMI&quot;</span> =<span class="st"> </span><span class="dv">2</span>, <span class="st">&quot;Exercise&quot;</span> =<span class="st"> </span><span class="dv">2</span>, <span class="st">&quot;Log Median Income&quot;</span> =<span class="st"> </span><span class="dv">2</span>))</code></pre></div>
-<table>
+<table class="table" style="width: auto !important; margin-left: auto; margin-right: auto;">
 <thead>
 <tr>
 <th style="border-bottom:hidden" colspan="1">
@@ -739,9 +745,9 @@ t.value
 <p>Now I would usually get fancy and bold or flag significant values. I would also use confidence intervals rather than standard errors and add some additional rows with some model summary terms (e.g. <span class="math inline">\(R^2\)</span>). If you want to see that, I’ll refer you to my github.</p>
 </div>
 <div id="plots" class="section level2">
-<h2><span class="header-section-number">3.3</span> Plots</h2>
+<h2>Plots</h2>
 <div id="one-big-plot" class="section level3">
-<h3><span class="header-section-number">3.3.1</span> One Big Plot</h3>
+<h3>One Big Plot</h3>
 <p>Sometimes, we want one big plot that shows all our results. What kind of plot? You have choice. Line graphs are popular, but they are perhaps overly simple for these simple linear relationships. We’d also have to go back and get predicted values, which is helpful, but again I’ll refer you to my github for more on that. Instead, we’re going to create a forest plot, which is useful for determining which terms are different than 0 and how those relate to other terms. We can do this for both our model terms (Intercept and t.value), but I’m going to restrict us to t.value, which tells us how a 1 point increase in a personality characteristic is associated with an outcome.</p>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">ipip50_nested <span class="op">%&gt;%</span>
 <span class="st">  </span><span class="kw">unnest</span>(tidy, <span class="dt">.drop =</span> T) <span class="op">%&gt;%</span>
@@ -760,7 +766,7 @@ t.value
 <p>But here’s where we pat ourselves on the back. We got from nesting our data to the plot above in FIFTEEN LINES OF CODE. Without purrr, it would take us that many lines just to run our models. Then we’d still need to tidy them, join them back together, and plot. I don’t want to do that. Or we could use a loop, and create a weird series of lists or a cluttered environment. No thank you on all accounts.</p>
 </div>
 <div id="predicted-values" class="section level3">
-<h3><span class="header-section-number">3.3.2</span> Predicted Values</h3>
+<h3>Predicted Values</h3>
 <p>But you will encounter times when you want to do predicted values. There are a number of ways to go about this (and both of these ignore that you can just use <code>geom_smooth()</code> in the <code>ggplot2</code> package with method = “lm” for simple linear models). I’m going to show you 2 purrrfect ways. Because demonstrations.<br />
 #### Single Plots First, let’s get predicted values for each model. We’ll use <code>expand.grid()</code> to get the full range of values for each personality traits (1 to 7) and then use the <code>predict()</code> function to get the predicted values, setting the “newdata” argument to the newly created range of personality values.</p>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">pred_fun &lt;-<span class="st"> </span><span class="cf">function</span>(mod){

@@ -103,22 +103,23 @@ The really bad solution would be to write the code to model these data, make a t
 
 A better solution would be a loop, where you use a nested loop to complete the steps for each trait-outcome pair. How you store these values can be a little wonky and often involes a bunch of different lists or a cluttered global environment with losts of objects.   
 
-But the best solution is purrr. What does this look like? Well, we start with a nested data frame:
+But the best solution is purrr. What does this look like? Well, we start with a nested data frame. To do that, we need to make sure our data is ready. I've found that the easiest way to work with data with purrr is to first convert your data to long form, where we want to have columns for all the variable we would want to iterate through in a loop. To help you understand what that means and looks like, I think it's useful to start with a non-nested data frame created by the `expand.grid()` function. 
+
+Basically, `expand.grid()`  takes what you give it and returns a data frame with all combinations of the variables. There is no limit to the number of columns this can have. Here, we feed it "Trait", which contains a vector of the Big 5, and "Outcome", which contains a vector of our outcomes, which results in a data frame with 2 columns and 10 rows. 
 
 ```{r}
-df <- expand.grid(
+(df <- expand.grid(
   Trait = c("E", "A", "C", "N", "O"),
   Outcome = c("BMI", "logMediInc", "exer"),
   stringsAsFactors = F
 ) %>%
-  tbl_df
-
-df
+  tbl_df)
 ```
 
-To do this, we use a useful little function called `expand_grid()`, which basically takes what you give it and returns a data frame with all combinations of the variables. There is no limit to the number of columns this can have. Here, we feed it "Trait", which contains a vector of the Big 5, and "Outcome", which contains a vector of our outcomes, which results in a data frame with 2 columns and 10 rows. 
 
-Now that we have that, we are almost ready to start modeling, tabling, and plotting our data. First, though, we need to make sure our data is ready. I've found that the easiest way to work with data with purrr is to first convert your data to long form, where all the columns in your `expand_grid()` data frame are represented in long form. This will allow us to use consistent variable names in formulas and functions and to feed the correct data into different programs using the `dplyr` helper function `filter()`.
+One cool thing this will allow us to do is to use consistent variable names in formulas and functions and to feed the correct data into different programs using the `dplyr` helper function `filter()`. You can use expand grid with purrr functions without nesting any data in the data frame (in fact, I do this a lot because I work with large data sets and lots of combinations), but I'm going to show you the nested data frame route in this case and refer you to my GitHub for when and how you would use the `expand.grid()` approach.
+
+Back to nested data frames. We want to end up with a data frame that has the same columns as the `expand.grid()` data frame except that we want an additional column that holds the data for each trait-outcome pair. To do this, we need to have a column that indexes both trait and outcome. To get this, we change our data to the "tidy" format using `gather()` in the `tidyr` package.  
 
 So let's take our Big 5 data and do that.
 
