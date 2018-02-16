@@ -1,0 +1,270 @@
+---
+title: "Samples and Sampling Distributions"
+author: "Emorie Beck"
+date: "2/16/2018"
+output: 
+  html_document:
+    theme: united
+    highlight: tango
+    df_print: paged
+    code_folding: hide
+    toc: true
+    toc_float: true
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = F, message = F, cache = T)
+```
+
+```{r global, include=FALSE}
+library(tidyverse)
+library(stringr)
+# load data in 'global' chunk so it can be shared by all users of the dashboard
+data_path <- "https://raw.githubusercontent.com/emoriebeck/Psy300_sampling_distributions/master"
+cols <- c("DOB", "Fave_Color", "Initials", "Section", "Age", "Height", 
+           "Weight", "Sleep", "Grade", "Good_Math", "Nervous_Stats")
+dat <- read.csv(url(sprintf("%s/demo_survey.csv", data_path)), stringsAsFactors = F) %>%
+  tbl_df() %>%
+  filter(!(row_number() %in% c(1,2))) %>%
+  select(Q67:Q86) %>%
+  setNames(cols) 
+
+
+dat <- dat %>%
+  mutate(Height = str_replace_all(Height, "’", "'"),
+         Height = str_replace_all(Height, "”", ""),
+         Height = str_replace_all(Height, " ", ""),
+         Height = str_replace_all(Height, '"', ''),
+         Height = str_replace_all(Height, "''", ""),
+         Height = str_replace_all(Height, "'$", ""),
+         Height = str_replace_all(Height, "-", "'")) %>%
+  separate(Height, c("Height_ft", "Height_in"), sep = "'") %>%
+  mutate_at(vars(Section:Nervous_Stats), funs(as.numeric)) %>%
+  mutate(Height_in = ifelse(Height_ft > 12, Height_ft, Height_in),
+         Height_ft = ifelse(Height_ft > 12, 0, Height_ft),
+         Height = Height_ft*12 + Height_in)
+  
+```
+
+```{r, results = 'asis'}
+library(knitr)
+library(kableExtra)
+
+dat %>% select(Initials, Section, Age, Height) %>%
+  kable(., "html", booktabs = T, digits = 2, escape = F) %>%
+  kable_styling(bootstrap_options = c("striped"), full_width = T) %>%
+  scroll_box(width = "750px", height = "300px")
+```
+
+
+And we can also plot a distribution for this *population*.  
+```{r}
+dat %>% 
+  ggplot(aes(x = Height)) +
+    geom_histogram(binwidth = 1, color = "black", fill = "gray") +
+    theme_classic() +
+    theme(axis.text = element_text(face = "bold", size = rel(1.2)),
+          axis.title = element_text(face = "bold", size = rel(1.2)))
+```
+
+# Sample Distributions
+We can also take samples from our population (the class) of height.
+
+## Raw values
+```{r}
+
+sample1 <- dat %>% select(Initials, Section, Age, Height) %>%
+  filter(row_number() %in% sample(1:nrow(dat),15))
+
+sample1 %>%
+  kable(., "html", booktabs = T, digits = 2, escape = F) %>%
+  kable_styling(bootstrap_options = c("striped"), full_width = T) %>%
+  scroll_box(width = "750px", height = "150px")
+
+
+sample2 <- dat %>% select(Initials, Section, Age, Height) %>%
+  filter(row_number() %in% sample(1:nrow(dat),15)) 
+
+sample2 %>%
+  kable(., "html", booktabs = T, digits = 2, escape = F) %>%
+  kable_styling(bootstrap_options = c("striped"), full_width = T) %>%
+  scroll_box(width = "750px", height = "150px")
+```
+
+
+## Distributions
+And look at their distributions.
+
+```{r}
+sample1 %>% mutate(sample = "Sample 1") %>%
+  full_join(sample2 %>% mutate(sample = "Sample 2")) %>%
+  ggplot(aes(x = Height, fill = sample)) +
+    geom_histogram(binwidth = 1, color = "black") +
+    facet_grid(.~sample) +
+    theme_classic() +
+    theme(axis.text = element_text(face = "bold", size = rel(1.2)),
+          axis.title = element_text(face = "bold", size = rel(1.2)),
+          legend.position = "none")
+```
+
+## Summary Statistics
+And summary statistics:
+```{r}
+sample1 %>% mutate(sample = "Sample 1") %>%
+  full_join(sample2 %>% mutate(sample = "Sample 2")) %>%
+  group_by(sample) %>%
+  summarize(Mean = mean(Height, na.rm = T),
+            SD = sd(Height, na.rm = T),
+            Min = min(Height, na.rm = T),
+            Max = max(Height, na.rm = T))  %>%
+  kable(., "html", booktabs = T, digits = 2, escape = F) %>%
+  kable_styling(bootstrap_options = c("striped"), full_width = T) 
+```
+
+# 100 Samples
+They're pretty close. What if we did this 100 times?
+
+## Raw values
+```{r}
+sample_fun <- function(df, size){
+  dat %>% select(Initials, Section, Age, Height) %>%
+    filter(row_number() %in% sample(1:nrow(dat),size)) 
+}
+
+sampled <- tibble(Sample = 1:100) %>%
+  mutate(data = map(Sample, ~sample_fun(., 15)))
+sampled %>%
+  unnest(data) %>%
+  group_by(Sample) %>%
+  summarize(Mean = mean(Height, na.rm = T),
+            SD = sd(Height, na.rm = T),
+            Min = min(Height, na.rm = T),
+            Max = max(Height, na.rm = T))  %>%
+  kable(., "html", booktabs = T, digits = 2, escape = F) %>%
+  kable_styling(bootstrap_options = c("striped"), full_width = T) %>%
+  scroll_box(width = "750px", height = "300px")
+```
+
+## Distribution
+The means vary some. What if we look at the distribution in a histogram?
+```{r}
+sampled %>% 
+  unnest(data) %>%
+  filter(Sample %in% sample(1:100, 9)) %>%
+  ggplot(aes(x = Height, fill = factor(Sample))) +
+    geom_histogram(binwidth = 1, color = "black") +
+    facet_wrap(~Sample, nrow = 3) +
+    theme_classic() +
+    theme(axis.text = element_text(face = "bold", size = rel(1.2)),
+          axis.title = element_text(face = "bold", size = rel(1.2)),
+          legend.position = "none")
+```
+
+## Sampling Distribution
+And now what if we look at a distribution of the sample means?
+```{r}
+sampled %>% 
+  unnest(data) %>%
+  group_by(Sample) %>%
+  summarize(Mean = mean(Height, na.rm = T)) %>%
+  ggplot(aes(x = Mean)) +
+    geom_histogram(binwidth = 1, color = "black", fill = "gray") +
+    theme_classic() +
+    theme(axis.text = element_text(face = "bold", size = rel(1.2)),
+          axis.title = element_text(face = "bold", size = rel(1.2)))
+```
+
+That looks more normal than the distribution of values in each sample.
+
+# Varying Sample Size
+Let's play with the number of samples.
+
+```{r}
+sampling_fun <- function(size, sample_size){
+  tibble(Sample = 1:size) %>%
+    mutate(data = map(Sample, ~sample_fun(., sample_size))) %>%
+    unnest(Sample)
+}
+
+sampled2 <- expand.grid(
+  Num_Samples = c(10, 100, 1000, 10000),
+  Sample_Size = 15) %>%
+  tbl_df %>%
+  mutate(samples = map2(Num_Samples, Sample_Size, sampling_fun))
+```
+
+## Distributions
+```{r}
+sampled2 %>% unnest(samples) %>% unnest(data) %>%
+  group_by(Num_Samples, Sample) %>%
+  summarize(Mean = mean(Height, na.rm = T)) %>%
+  ggplot(aes(x = Mean, y = ..density.., fill = factor(Num_Samples))) +
+    geom_histogram(color = "black", bins = 20) +
+    facet_grid(.~Num_Samples) +
+    theme_classic() +
+    theme(axis.text = element_text(face = "bold", size = rel(1.2)),
+          axis.title = element_text(face = "bold", size = rel(1.2)),
+          legend.position = "none")
+```
+
+Notably, our originally non-normal data now looks normal!!
+
+## Standard Error of the Mean
+And we can get something important from this: standard errors, which are the standard deviation of the sampling distribution of the mean.
+
+```{r}
+sampled2 %>% unnest(samples) %>% unnest(data) %>%
+  group_by(Num_Samples, Sample) %>%
+  summarize(Mean = mean(Height, na.rm = T)) %>%
+  group_by(Num_Samples) %>%
+  summarize(SD = sd(Mean, na.rm = T))
+```
+
+Don't worry about the fact that the standard errors get larger. Note instead that once we hit 1000 and 10000, they are consistent -- they are better estimates.  
+
+# Central Limit Theorum
+
+But wait, aren't standard errors supposed to get smaller? Yes but with larger SAMPLE SIZES, not more samples.  Watch:
+
+```{r}
+sample_fun <- function(df, size){
+  dat %>% select(Initials, Section, Age, Height) %>%
+    filter(row_number() %in% sample(nrow(dat), size, replace = T)) 
+}
+
+sampled3 <- expand.grid(
+  Num_Samples = c(10, 100, 1000, 10000),
+  Sample_Size = c(10,100,250),
+  stringsAsFactors = F) %>%
+  tbl_df %>%
+  mutate(data = map2(Num_Samples, Sample_Size, sampling_fun))
+
+sampled3 %>%
+  unnest(data) %>% unnest(data) %>%
+  filter(Num_Samples == 100) %>%
+  group_by(Sample, Sample_Size) %>%
+  summarize(Mean = mean(Height, na.rm = T)) %>%
+  ggplot(aes(x = Mean,  fill = factor(Sample_Size))) +
+    geom_histogram(bins = 50) +
+    facet_grid(.~Sample_Size) +
+    theme_classic() +
+    theme(axis.text = element_text(face = "bold", size = rel(1.2)),
+          axis.title = element_text(face = "bold", size = rel(1.2)),
+          legend.position = "none")
+```
+
+And this is the central limit theorum. Our estimates more closely approximate reality and even non-normal distributions of real data approximate normal when looking at means. Plus, when we look at the SD's, they've gotten A LOT narrower.  
+
+```{r}
+sampled3 %>% unnest(data) %>% unnest(data) %>%
+  filter(Num_Samples == 100) %>%
+  group_by(Sample_Size, Sample) %>%
+  summarize(Mean = mean(Height, na.rm = T)) %>%
+  group_by(Sample_Size) %>%
+  summarize(SD = sd(Mean, na.rm = T))
+```
+
+
+
