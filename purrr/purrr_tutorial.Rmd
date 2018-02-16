@@ -110,7 +110,7 @@ Basically, `expand.grid()`  takes what you give it and returns a data frame with
 ```{r}
 (df <- expand.grid(
   Trait = c("E", "A", "C", "N", "O"),
-  Outcome = c("BMI", "logMediInc", "exer"),
+  Outcome = c("BMI", "logMedInc", "exer"),
   stringsAsFactors = F
 ) %>%
   tbl_df)
@@ -133,27 +133,31 @@ So let's take our Big 5 data and do that.
 
 # Now let's make the outcomes long
 ipip50_composites <- ipip50_composites %>%
-  gather(key = outcome, value = o.value, BMI:logMedInc) 
+  gather(key = Outcome, value = o.value, BMI:logMedInc) 
 ```
 
 Now that our data is in long format, we have a couple of options. The first is to use the `nest()` function from the `tidyr` package to chunk our data by trait and outcome. This will result in a data frame with 3 columns: 1 that indexes the Trait, one that indexes the Outcome, and one that indexes the data for that trait and outcome combination. 
 
 ```{r}
 (ipip50_nested <- ipip50_composites %>% 
-  group_by(Trait, outcome) %>%
+  group_by(Trait, Outcome) %>%
   nest())
 ```
 
 Basically, instead of the cells in the "data" column being a single numeric, logical, or character value, each cell is a data frame! Note that the class of the "data" column is a list (hence the name "list column") and the class of each cell is a tibble. o_O Pretty cool, huh? Here's why: by putting a data frame of the data for each trait / outcome combination in a single cell, we can operate on each cell like we would a cell in a normal data frame. Sort of.
 
-## The `map()` Functions
+## The `map()` Functions {.tabset}
 I say sort of because we need another function, this time from the `purrr` package (yay!) called `map()`. Now my purpose here isn't to go through every possible way you can use this. If you want to learn more of the ins and outs see http://r4ds.had.co.nz/many-models.html.  My goal is to show you how I, a psychology grad student, uses purrr every. single. day. in my research.
 
 What we want to do is to run a model using personality to predict our outcomes for each combination of trait and outcome. Now that we have a data frame for each nested in a data frame, we're ready to do that. Here's how.  
 
+### `map()`
 ```{r}
+start_time <- Sys.time()
 (ipip50_nested <- ipip50_nested %>%
   mutate(model = map(data, ~lm(o.value ~ t.value, data = .))))
+end_time <- Sys.time()
+print(end_time - start_time)
 ```
 
 What's going on there? Well, we're using `mutate()` from dplyr to create a new column in our data frame called "model." Then, we use the `map()` function to tell it that we want to take each of the cells in the "data" column and run a linear model predicting our outcomes (o.value) from personality (t.value). The "data = ." part follows because we are within a `dplyr` pipe.  
@@ -168,6 +172,49 @@ Watch:
 (ipip50_nested <- ipip50_nested %>%
   mutate(tidy = map(model, broom::tidy)))
 ```
+
+### `plyr` alternative
+To be fair, there are other alternative, like `dlply()` in the `plyr` package. I'll demonstrate it below then make a case for why not to do this.  
+
+So if we start by taking our long format data frame, we can use a very similar format to map to create a list of models.
+```{r}
+models <- dlply(ipip50_composites, .(Trait, Outcome), function(x) lm(o.value ~ t.value, data = x))
+```
+
+Then we could again use `tidy()` from `broom` to get summaries.  
+```{r}
+tidies <- llply(models, broom::tidy)
+```
+
+And then use `combine()` from `dplyr` to merge them. BUT, we have a problem. (1) We have a weird, nested list, and (2) `combine()` doesn't index our grouping variables like our nested data frame + `map()`.  
+
+### The for Loop Alternative
+Okay, but we can do this with a for loop, so why not? My rationale is that it makes my brain hurt to write a loop that is half as functional the purrr solution. Watch:
+```{r}
+Traits <- c("E", "A", "C", "N", "O")
+Outcomes <- c(c("BMI", "logMedInc", "exer"))
+
+ipip50_loop <- list()
+counter <- 1
+start_time <- Sys.time()
+for (trait in Traits){
+  for (outcome in Outcomes){
+    df <- ipip50_composites %>% 
+      filter(Trait == trait & Outcome == outcome)
+    tmp <- tibble(Trait = trait, Outcome = outcome)
+    tmp$model <- list(lm(o.value ~ t.value, data = df))
+    ipip50_loop[[counter]] <- tmp
+    counter <- counter + 1
+  }
+}
+end_time <- Sys.time()
+print(end_time - start_time)
+```
+
+This took a lot more lines of code and also took longer. For a few models with a small data set, this doesn't matter much. But when you work with hundreds of models with 10's or 100's of thousands of observations, this adds up.  
+
+So the lesson here is just use `purrr.` Please.
+
 
 ## Unnesting
 Using the `tidy()` function from the `broom` package, we now have another column. Again, the column's class is "list" but the cell's class is "data.frame". How can we use this? Well, the `nest()` function we used earlier has a sibling called `unnest()`. It does the opposite of `nest()`; it takes our list columns and expands it. So, since we have 2 x 5 data frame in each cell of the "tidy" column, when we unnest it, there will be rows for each Trait and outcome combination (where there was only 1 in the nested data frame). This will make more sense with a demonstration:
@@ -190,7 +237,7 @@ Let's create a table with different columns for each of the outcomes, and differ
   select(Trait:std.error) %>%
   rename(b = estimate, SE = std.error) %>%
   gather(key = tmp, value = value, b, SE) %>%
-  unite(tmp, outcome, tmp, sep = ".") %>%
+  unite(tmp, Outcome, tmp, sep = ".") %>%
   spread(key = tmp, value = value))
 ```
 
@@ -227,7 +274,7 @@ ipip50_nested %>%
                   width = .1) +
     geom_point(aes(color = Trait), size = 3) +
     coord_flip() +
-    facet_wrap(~outcome, scale = "free") +
+    facet_wrap(~Outcome, scale = "free") +
     theme_classic() +
     theme(legend.position = "none")
 ```
@@ -238,8 +285,11 @@ But here's where we pat ourselves on the back. We got from nesting our data to t
 
 ### Predicted Values
 But you will encounter times when you want to do predicted values. There are a number of ways to go about this (and both of these ignore that you can just use `geom_smooth()` in the `ggplot2` package with method = "lm" for simple linear models). I'm going to show you 2 purrrfect ways. Because demonstrations.  
+
 #### Single Plots
 First, let's get predicted values for each model. We'll use `expand.grid()` to get the full range of values for each personality traits (1 to 7) and then use the `predict()` function to get the predicted values, setting the "newdata" argument to the newly created range of personality values.  
+
+To do this, I'm also going to introduce something that is central to `purrr` programming: local functions. As a general rule, if you ever have to do something multiple times, write a function. Save yourself. Please. When writing functions for `purrr`, the basic mindframe I use is to make the inputs of the data frame either the "data" column of the nested data frame or the individual columns of interest. So in the function below, I want to get predicted values, so I take a model object as input and output a data frame of predicted values.  
 
 ```{r}
 pred_fun <- function(mod){
@@ -265,7 +315,7 @@ plot_fun <- function(df, trait, outcome){
 }
 
 (ipip50_nested <- ipip50_nested %>%
-  mutate(plot = pmap(list(pred, Trait, outcome), plot_fun)))
+  mutate(plot = pmap(list(pred, Trait, Outcome), plot_fun)))
 ```
 
 Let's take a look at how this plot actually looks:  
@@ -280,30 +330,30 @@ ipip50_nested %>%
   unnest(pred) %>%
   ggplot(aes(x = t.value, y = pred, color = Trait)) +
     geom_line(size = 2) +
-    facet_wrap(~outcome, scale = "free") +
+    facet_wrap(~Outcome, scale = "free") +
     theme_classic() +
     theme(legend.position = "bottom")
 ```
 
-Meh, this is fine, but the scales off. This is what I'd call a "wow graph" because it exaggerates the differences.  
+Meh, this is fine, but the scale's off. This is what I'd call a "wow graph" because it exaggerates the differences. I could write some code to put each graph on a realistic scale for the outcome, but for now, I won't.     
 
-```{r}
+```{r, echo = F, eval = F}
 plot_fun <- function(df, outcome){
   df %>%
-    mutate(outcome = outcome) %>%
+    mutate(Outcome = outcome) %>%
     ggplot(aes(x = t.value, y = pred, color = Trait)) +
     geom_line(size = 2) +
     labs(y = NULL, x = "Personality Rating (1-7)") +
-    facet_wrap(~outcome) +
+    facet_wrap(~Outcome) +
     theme_classic() +
     theme(legend.position = "bottom")
 }
 
 (plots <- ipip50_nested %>%
   unnest(pred) %>%
-  group_by(outcome) %>%
+  group_by(Outcome) %>%
   nest() %>%
-  mutate(plot = map2(data, outcome, plot_fun)))
+  mutate(plot = map2(data, Outcome, plot_fun)))
 
 do.call("grid.arrange", list(grobs = plots$plot, nrow = 1))
 ```
