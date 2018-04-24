@@ -1,0 +1,872 @@
+---
+title: "Conditional Models"
+author: "Emorie D Beck"
+date: "9/7/2017"
+output: 
+  pdf_document:
+    keep_tex: yes
+    toc: yes
+    includes:
+            in_header:
+                header.tex
+  html_document:
+    theme: united
+    highlight: tango
+    df_print: paged
+    code_folding: show
+    toc: true
+    toc_float: true
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = T, eval = T, cache = T, warning = F, message = F)
+```
+
+#Workspace
+##Packages
+```{r, results = 'hide', message = F, warning = F}
+library(psych)
+library(sjPlot)
+library(broom)
+library(lme4)
+library(MuMIn)
+library(merTools)
+library(reghelper)
+library(stargazer)
+library(plyr)
+library(tidyverse)
+```
+
+
+# Background
+## Basic Syntex
+From last week:
+\begin{itemize}
+  \item \textbf{Level 1:} $Y_{ij} = \beta_{0j} + \varepsilon{ij}$
+  \item \textbf{Level 2:} $\beta_{0j} = \gamma_{00} + U_{0j}$
+\end{itemize}
+
+## Sample Data
+The National Longitudinal Study of Youths 1979 Child and Young Adult Sample (NLSYCYA) is a longitudinal study conducted by the National Bureau of Labor Statistics. The sample includes the children of the original 1979 sample. Here, we are going to use a subset of the more than 11,000 variables available that include the following.
+
+Item Name   | Description                   | Time-Varying?
+----------- | ----------------------------- | -------------
+PROC_CID    | Participant ID                | No  
+Dem_DOB     | Year of Date of Birth         | No
+groups      | Jail, Community Service, None | No
+DemPWeight  | Weight Percentile at age 10   | No
+age         | Age of participant            | Yes
+Year        | Year of Survey                | Yes
+age0        | Age of participant (centered) | Yes
+SensSeek    | Sensation-Seeking Composite   | Yes
+CESD        | CESD Depression Composite     | Yes
+
+```{r, eval = T, tidy = T}
+data_path <- "https://github.com/longitudinal-data/1-descriptives-and-graphs-emoriebeck/raw/master/Conditional_Models"
+load(url(paste(data_path, "sample.RData", sep = "/")))
+
+head(sample_dat)
+```
+
+
+## Simple Growth Curve Model
+
+\begin{itemize}
+  \item \textbf{Level 1:} $Y_{ij} = \beta_{0j} + \beta_{1j}*time_{ij} + \varepsilon{ij}$
+  \item \textbf{Level 2:} 
+    \begin{itemize} 
+      \item $\beta_{0j} = \gamma_{00} + U_{0j}$
+      \item $\beta_{1j} = \gamma_{10} + U_{1j}$
+    \end{itemize}
+\end{itemize}
+
+```{r, echo = F}
+sample_dat %>%
+  ggplot(aes(x = age, y = SensSeek)) + 
+    geom_smooth(aes(group = PROC_CID), method = "lm", se = F, color = "gray", size = .2) +
+    geom_smooth(method = "lm", se = F, color = "red", size = 2) +
+    labs(x = "Age", y = "Sensation Seeking Composite", title = "Simple Growth Curve") +
+    theme_classic() +
+    theme(legend.position = "none",
+          axis.text = element_text(face = "bold", size = rel(1.2)),
+          axis.title = element_text(face = "bold", size = rel(1.2)),
+          plot.title = element_text(face = "bold", size = rel(1.2), hjust = .5))
+```
+
+## In R
+\small
+```{r}
+mod0 <- lmer(SensSeek ~ age0 + (1|PROC_CID), data = sample_dat)
+```
+
+\centering
+\small
+```{r, echo = F}
+summary(mod0)
+```
+
+\normalsize
+\raggedright
+
+## Conditional Models: Adding Predictors
+Let's see if we can better predict participants' change in sensation seeking over time by adding covariates.  
+
+Predictor      | Continuous  | Categorical 
+----------- | ----------- | -----------
+Time Invariant  | Weight for Age  | Group 
+Time Varying  | CESD Scores | Depression  
+
+
+# Time Invariant Predictors
+## Time Invariant Predictors: Continuous
+
+The basic equation, specifying a random intercept and slope:    
+\begin{itemize}
+  \item \textbf{Level 1:} $Y_{ij} = \beta_{0j} + \beta_{1j}*time_{1j} + \varepsilon{ij}$
+  \item \textbf{Level 2:} 
+    \begin{itemize} 
+      \item $\beta_{0j} = \gamma_{00} + \gamma_{01}*X_{2j} + U_{0j}$
+      \item $\beta_{1j} = \gamma_{10} + \gamma_{11}*X_{2j} + U_{1j}$
+    \end{itemize}
+\end{itemize}
+
+But we need to break this down to see that adding additional predictors results in interaction terms:  
+
+$Y_{ij} = \gamma_{00} + \gamma_{01}*X_{2j} + U_{0j} + (\gamma_{10} + \gamma_{11}*X_{2j} + U_{1j})*X_{1j} + \varepsilon{ij}$
+$Y_{ij} = \gamma_{00} + \gamma_{01}*X_{2j} + \gamma_{10}*X_{1j} + \textcolor{red}{\gamma_{11}*X_{2j}*X_{1j}} + U_{0j} + U_{1j}*X_{1j} + \varepsilon{ij}$
+
+We can also fit this with intercepts depending on weight, but without the change (slope) dependent on weight:  
+$Y_{ij} = \gamma_{00} + \gamma_{01}*X_{2j} + U_{0j} + (\gamma_{10} + U_{1j})*X_{1j} + \varepsilon{ij}$
+$Y_{ij} = \gamma_{00} + \gamma_{01}*X_{2j} + \gamma_{10}*X_{1j} + U_{0j} + U_{1j}*X_{1j} + \varepsilon{ij}$
+
+### Continuous Example - Weight for Age Percentile  
+
+\small
+```{r}
+describe(sample_dat$DemPweight)
+```
+
+\normalsize
+
+```{r, echo = F}
+sample_dat %>%
+  ggplot(aes(x = age, y = SensSeek)) + 
+    geom_smooth(aes(group = PROC_CID, color = DemPweight), method = "lm", se = F, size = .2) +
+    geom_smooth(method = "lm", se = F, color = "red", size = 1) +
+    labs(x = "Age", y = "Sensation Seeking Composite", title = "Simple Growth Curve") +
+    theme_classic() +
+    theme(#legend.position = "none",
+          axis.text = element_text(face = "bold", size = rel(1.2)),
+          axis.title = element_text(face = "bold", size = rel(1.2)),
+          plot.title = element_text(face = "bold", size = rel(1.2), hjust = .5))
+```
+
+\small
+```{r,results='hide'}
+# time invariant covariate with random intecept (with weight as covariate) 
+# and slope (without weight as a covariate)
+mod1a <- lmer(SensSeek ~ age0 + DemPweight + (age0|PROC_CID), 
+              data = sample_dat)
+
+summary(mod1a)
+
+# time invariant predictor with random slope and intercept
+mod1b <- lmer(SensSeek ~ age0 + DemPweight + age0*DemPweight + 
+                (age0|PROC_CID), data = sample_dat)
+
+summary(mod1b)
+```
+
+\normalsize
+
+##Time Invariant Predictors: Categorical 
+### Categorical Example - 2 level group
+
+Let's start with the basic syntax:  
+
+\begin{itemize}
+  \item \textbf{Level 1:} $Y_{ij} = \beta_{0j} + \beta_{1j}*time_{1j} + \varepsilon{ij}$
+  \item \textbf{Level 2:} 
+    \begin{itemize} 
+      \item $\beta_{0j} = \gamma_{00} + \gamma_{01}*X_{2j} + U_{0j}$
+      \item $\beta_{1j} = \gamma_{10} + \gamma_{11}*X_{2j} + U_{1j}$
+    \end{itemize}
+\end{itemize}
+
+Now let's swap that out for a 2 group sample from the present data:  
+
+\begin{itemize}
+  \item \textbf{Level 1:} $Y_{ij} = \beta_{0j} + \beta_{1j}*age0_{ij} + \varepsilon{ij}$
+  \item \textbf{Level 2:} 
+    \begin{itemize} 
+      \item $\beta_{0j} = \gamma_{00} + \gamma_{01}*groupsNone + U_{0j}$
+      \item $\beta_{1j} = \gamma_{10} + \gamma_{11}*groupsNone + U_{1j}$
+    \end{itemize}
+\end{itemize}
+
+Variable  | D1  
+--------- | ---
+Jail      | 0 
+None      | 1
+
+And plot it.  
+```{r, echo = F}
+sample_dat %>% filter(groups != "CommServ") %>%
+  ggplot(aes(x = age, y = SensSeek, color = groups)) +
+    geom_smooth(aes(group = PROC_CID),method = "lm", se = F, color = "gray", size = .2) +
+    geom_smooth(method = "lm", se = F, size = 1) +
+    labs(x = "Age", y = "Sensation Seeking Composite",
+         title = "2 Group Time Invariant Conditional Growth Models") +
+    theme_classic() +
+    theme(axis.text = element_text(face = "bold", size = rel(1.2)),
+          axis.title = element_text(face = "bold", size = rel(1.2)),
+          legend.title = element_text(face = "bold", size = rel(1.2)),
+          plot.title = element_text(face = "bold", size = rel(1.2), hjust = .5))
+```
+
+
+And model it:  
+\small
+```{r}
+mod2g <- lmer(SensSeek ~ age0 + DemPweight + groups + age0*groups + (age0|PROC_CID), 
+              data = sample_dat %>% filter(groups != "CommServ"))
+summary(mod2g)
+
+source("https://raw.githubusercontent.com/emoriebeck/homeworks/master/table_fun.R")
+options(knitr.kable.NA = '')
+table_fun(mod2g)
+```
+
+\normalsize
+
+### Categorical Example - 3 level group  
+
+```{r, echo = F}
+sample_dat %>%
+  ggplot(aes(x = age, y = SensSeek, color = groups)) +
+    geom_smooth(aes(group = PROC_CID), method = "lm", se = F, color = "gray", size = .2) +
+    geom_smooth(method = "lm", se = F, size = 1) +
+    labs(x = "Age", y = "Sensation Seeking Composite",
+         title = "2 Group Time Invariant Conditional Growth Models") +
+    theme_classic() +
+    theme(axis.text = element_text(face = "bold", size = rel(1.2)),
+          axis.title = element_text(face = "bold", size = rel(1.2)),
+          legend.title = element_text(face = "bold", size = rel(1.2)),
+          plot.title = element_text(face = "bold", size = rel(1.2), hjust = .5))
+```
+
+
+\begin{itemize}
+  \item \textbf{Level 1:} $Y_{ij} = \beta_{0j} + \beta_{1j}*age0_{ij} + \varepsilon{ij}$
+  \item \textbf{Level 2:} 
+    \begin{itemize} 
+      \item $\beta_{0j} = \gamma_{00} + \gamma_{01}*D1 + \gamma_{02}*D2 + U_{0j}$
+      \item $\beta_{1j} = \gamma_{10} + \gamma_{11}*D1 + \gamma_{12}*D2 + U_{1j}$
+    \end{itemize}
+\end{itemize}
+
+Variable  | D1  | D2  
+--------- | --- | ---
+Jail      | 0   | 0
+None      | 1   | 0
+CommServ  | 0   | 1  
+
+
+\small
+```{r}
+mod3g <- lmer(SensSeek ~ age0 + groups + age0*groups + 
+                (age0|PROC_CID), data = sample_dat)
+summary(mod3g)
+```
+
+
+\normalsize
+
+# Side Notes: Practical Applications
+## Side Note: `lme4` helper functions  
+
+```{r, eval = F}
+vcov(mod2g)
+VarCorr(mod2g)
+fixef(mod2g)
+head(ranef(mod2g)[[1]])
+head(coef(mod2g)[[1]])
+confint.merMod(mod2g, method = "boot")
+reghelper::ICC(mod2g)
+MuMIn::r.squaredGLMM(mod2g)
+```
+
+\small
+```{r}
+vcov(mod2g)
+```
+
+
+\small
+```{r}
+VarCorr(mod2g)
+```
+
+
+\small
+```{r}
+fixef(mod2g)
+```
+
+
+\small
+```{r}
+head(ranef(mod2g)[[1]])
+```
+
+```{r}
+head(coef(mod2g)[[1]])
+```
+
+\small
+```{r, warning = F, message = F}
+confint.merMod(mod2g, method = "boot", nsim = 10)
+```
+
+All units of the random effects are in standard deviation units (which means you need to square them to get the variance!!)  
+\begin{itemize}
+  \item .sig01 = sd of random intercept = $\sqrt{\tau_{00}}$  
+  \item .sig02 = correlation between slope and intercept = $\sqrt{\tau_{10}}$  
+  \item .sig03 = sd of random slope = $\sqrt{\tau_{11}}$  
+  \item .sigma = residual variance = $\hat{\sigma}$  
+\end{itemize}
+
+
+\small
+```{r}
+reghelper::ICC(mod2g)
+```
+
+***
+\small
+\textbf{Conditional $R^2$:} How much variance fixed + random effects explain  
+\textbf{Marginal $R^2$:} how much variance the fixed effects explain  
+
+[explained here](https://jonlefcheck.net/2013/03/13/r2-for-linear-mixed-effects-models/)  
+
+```{r}
+MuMIn::r.squaredGLMM(mod2g)
+```
+
+\normalsize
+
+## Side Note: Creating MLM Tables
+There are lots of helpful packages for this, including `stargazer` and `sjPlot`, which are demonstrated below.  
+\small
+```{r, eval = F}
+stargazer::stargazer(mod2g)
+sjPlot::sjt.lmer(mod2g)
+```
+
+\normalsize
+
+The problem is that `stargazer()` doesn't include all the terms we want, and `sjt.lmer()` only renders html. Embedded in the `.Rmd` version of these slides is some code that should help you to extract the terms you need and create a table using `dplyr` and `tidyr` that you can render in \LaTeX using `stargazer`.
+
+But let's understand where those variables came from. To do so, we'll use the `broom` package in R to grab the terms we need.  
+
+Description                 | Math Notation 
+--------------------------- | ------------------
+Fixed Effect Intercept      | $\gamma_{00}$  
+Fixed Effect Group Intercept  | $\gamma_{01}$  
+Fixed Effect Age Slope      | $\gamma_{10}$  
+Fixed Effect Group Slope    | $\gamma_{11}$  
+Individual Random Intercepts  | $U_{0j}$  
+Variance of Random Intercepts | $\tau_{00}$  
+Random Age Slopes | $U_{10}$  
+Variance of Random Age Slopes | $\tau_{11}$  
+Correlation b/w Random Slopes and Intercepts  | $\tau_{10}$  
+Residual Variance | $\hat{\sigma}^2$   
+Intraclass Correlation  | ICC   
+Conditional $R^2$           | $R^2_c$  
+Marginal $R^2$              | $R^2_m$  
+
+
+```{r, results='hide'}
+broom::tidy(mod2g)
+broom::glance(mod2g)
+```
+
+\small
+```{r, echo = F}
+broom::tidy(mod2g)
+broom::glance(mod2g)
+```
+
+Below is code that *should* work for all models. Just run the function and save it as an `R` object. You can use this with `papaja` and the `apa_table()` function pretty easily. The trick is that if you are not using the papaja template, the proper LaTeX packages may not be loaded. You can get around this by attaching a .tex file calling the packages under "in_header: header.tex" in your YAML header. The YAML header of this .Rmd file contains the necessary syntax and the header.tex file with the proper packages.  
+```{r, echo = T, results = 'hide'}
+## here's some code to make a table. You shouldn't need to modify anything here 
+## I've also included an R file called table_fun.R that you can directly source from github.
+## fixed effects first ##
+table_fun <- function(model){
+  fixed <- broom::tidy(model) %>% filter(group == "fixed") %>%
+    select(term, estimate) 
+  ## add random effects ##
+  rand <- VarCorr(model)[[1]]
+  if(nrow(rand) > 1){
+  rand <- rand[1:nrow(rand), 1:nrow(rand)]
+  }
+  colnames(rand)[colnames(rand) == "(Intercept)"] <- "Intercept"
+  rownames(rand)[rownames(rand) == "(Intercept)"] <- "Intercept"
+  vars <- rownames(rand)
+  rand[upper.tri(rand)] <- NA
+  rand <- data.frame(rand) %>% mutate(var1 = rownames(.)) %>%
+    gather(key = var2, value = estimate, -var1, na.rm = T) %>%
+    mutate(var1 = mapvalues(var1, vars, 0:(length(vars)-1)),
+           var2 = mapvalues(var2, unique(var2), 0:(length(vars)-1))) %>%
+    filter(var1 == var2) %>%
+    unite(var, var1, var2, sep = "") %>%
+    mutate(var = sprintf("$\\tau_{%s}$", var))
+  ## get confidence intervals ##
+  CI <- data.frame(confint.merMod(model, method = "boot", nsim = 10, oldNames = F)) %>%
+    mutate(term = rownames(.)) %>% setNames(c("lower", "upper", "term"))
+  
+  CI %>% filter(term == "sigma") %>%
+    mutate(estimate = sigma(model),
+           term = "$\\sigma^2$",
+           type = "Residuals")
+  
+  ## Get ICC & R2 values ##
+  ICC <- reghelper::ICC(model)
+  R2 <- MuMIn::r.squaredGLMM(model)
+  
+  ## format the fixed effects
+  fixed <- fixed %>% left_join(CI %>% filter(!grepl(".sig", term))) %>%
+    mutate(type = "Fixed Parts")
+  
+  rand <- rand %>%
+    left_join(
+      CI %>% filter(grepl("sd", term)) %>%
+        mutate(lower = lower^2, upper = upper^2,
+               var = mapvalues(term, unique(term), 0:(length(unique(term))-1)),
+               var = sprintf("$\\tau_{%s%s}$", var, var)) %>% select(-term)) %>%
+    mutate(type = "Random Parts") %>% rename(term = var)
+  
+  mod_terms <- tribble(
+    ~term, ~estimate, ~type,
+    # "ICC", ICC, "Model Terms",
+    "$R^2_m$", R2[1], "Model Terms",
+    "$R^2_c$", R2[2], "Model Terms"
+  )
+  
+  tab <- fixed %>%
+    full_join(rand) %>%
+    mutate(CI = sprintf("[%.2f, %.2f]", lower, upper)) %>%
+    select(-lower, -upper) %>%
+    full_join(mod_terms) %>%
+    mutate(estimate = sprintf("%.2f", estimate)) %>%
+    dplyr::rename(b = estimate) %>%
+    select(type, everything())
+  return(tab)
+}
+# you can use this with papaja and the apa_table function pretty easily
+# the trick is that if you are not using the papaja template, the proper
+# LaTeX packages may not be loaded. You can get around this by attaching
+# a .tex file calling the packages under "in_header: header.tex" in your YAML
+# header the YAML header of this .Rmd file contains the necessary syntax and 
+# the header.tex file with the proper packages
+
+tab <- table_fun(mod2g)
+
+```
+
+###Basic: `kable()`  
+\small
+```{r}
+options(knitr.kable.NA = '')
+knitr::kable(tab, caption = "Ugly MLM Table Example")
+```
+
+
+### More Advanced: `kable()` + `kableExtra`  
+\small
+```{r, results = 'asis'}
+library(kableExtra)
+options(knitr.kable.NA = '')
+tab %>% #select(-type) %>%
+    mutate(term = gsub("[()]", "", term)) %>% 
+  knitr::kable(.,
+    caption = "Not Quite Right kableExtra MLM Table Example", 
+    format = "html", 
+    booktabs = T, 
+    escape = F) %>%
+  group_rows("Fixed", 1,4) %>%
+  group_rows("Random", 5,9) %>%
+  group_rows("Model", 9,11) %>%
+  collapse_rows(1) %>%
+  kable_styling(full_width = F)
+  add_header_above(c(" ", " ", "Model 1" = 2))
+```
+
+
+### Alternative: `papaja` + `apa_table()`  
+\small
+```{r, results = 'asis'}
+papaja::apa_table(tab %>% select(-type),caption = "papaja MLM Table Example", 
+    na_string = "", stub_indents = list(Fixed = c(1:4), Random = c(5:8), Summary = c(9:11)),
+    col_spanners = list(`Sensation Seeking` = c(2,3)))
+```
+\normalsize
+
+###The Case of Multiple Models
+Basically you can run this multiple times and then join the data frames together. The only trick is that you'll have to change the column names to make sure they are distinct. My favorite way of doing this is with the `purrr` package in R (anyone who knows me can feign shock at this). So basically, you make a dataframe of your models, which looks like this:
+```{r, results = 'asis'}
+mod.df <- tibble(
+  outcome = c("Model 2g", "Model 3g", "Model Cont"), # just plug in whatever name for your outcome
+  mod = c(mod2g, mod3g, mod1b) # basically just listing models that correspond to your outcomes
+)
+
+# then you use purrr
+
+mod.df.long <- mod.df %>%
+  mutate(tab = map(mod, table_fun)) %>%
+  unnest(tab, .drop = T) 
+
+table.df <- mod.df.long %>%
+  gather(key = param, value = value, b, CI) %>%
+  unite(param, outcome, param, sep = ".") %>%
+  spread(key = param, value = value) %>%
+  mutate(type = factor(type, levels = c("Fixed Parts", "Random Parts", "Model Terms"))) %>%
+  arrange(type)
+
+# then you can use apa_table or kable + kableExtra to make them pretty
+options(papaja.na_string = " ")
+papaja::apa_table(table.df %>% select(-type), caption = "Multi-Model Table",
+          col_spanners = list(`2 group` = c(2,3), `3 group` = c(4,5), `Continuous` = c(6,7)),
+          stub_indents = list(Fixed = seq(1,8), Random = seq(9,12), `Model Terms` = seq(13,15)),
+          na_string = " ", 
+          col.names = c(" ", rep(c("b", "CI"), times = 3)),
+          align = c("l", rep("c", 6)))
+```
+
+
+##Side Note: Plotting
+### Lazy Method: `sjPlot` + `sjt.int()`  
+
+####Categorical
+\small
+```{r}
+sjp.int(mod2g, type = "eff", p.kr = F, swap.pred = T)
+```
+
+####Continuous
+\small
+```{r}
+sjp.int(mod1b, type = "eff", p.kr = F, swap.pred = T, mdrt.values = "meansd")
+```
+
+###Medium Advanced: Using the `predict()` function
+####Categorical
+```{r}
+fixed.frame <- 
+  data.frame(expand.grid(age0 = seq(0,10,2), 
+             groups = c("None","Jail"))) %>%
+  mutate(pred = predict(mod2g, newdata = ., re.form = NA))
+
+fixed.frame %>%
+  mutate(age = age0 + 14) %>%
+  ggplot(aes(x = age, y = pred, color = groups)) +
+    geom_line(size = 2) + 
+    lims(y = c(0,4)) +
+    labs(x = "Age", y = "Sensation Seeking Composite",
+         title = "2 Group Time Invariant Conditional Growth Models") +
+    theme_classic() +
+    theme(axis.text = element_text(face = "bold", size = rel(1.2)),
+          axis.title = element_text(face = "bold", size = rel(1.2)),
+          legend.title = element_text(face = "bold", size = rel(1.2)),
+          plot.title = element_text(face = "bold", size = rel(1.2), hjust = .5))
+
+```
+
+
+####Continuous
+```{r}
+fixed.frame <- sample_dat %>%
+  summarise(mean = mean(DemPweight, na.rm = T), 
+            sd = sd(DemPweight, na.rm = T))
+
+fixed.frame <- 
+  data.frame(
+    expand.grid(
+      # here, you add values for your time variable and predictors
+      age0 = seq(0,10,2), 
+      DemPweight = c(fixed.frame$mean-fixed.frame$sd,
+                     fixed.frame$mean,
+                     fixed.frame$mean+fixed.frame$sd))) %>%
+  mutate(pred = predict(mod1b, newdata = ., re.form = NA))
+
+
+fixed.frame %>%
+  mutate(Weight = factor(DemPweight, levels = unique(DemPweight), labels = c("-1SD", "0SD", "1SD")),
+         age = age0 + 14) %>%
+  ggplot(aes(x = age, y = pred, color = Weight)) +
+    geom_line(size = 2) + 
+    labs(x = "Age", y = "Sensation Seeking Composite",
+         title = "Continuous Invariant Conditional Growth Models") +
+    theme_classic() +
+    theme(axis.text = element_text(face = "bold", size = rel(1.2)),
+          axis.title = element_text(face = "bold", size = rel(1.2)),
+          legend.title = element_text(face = "bold", size = rel(1.2)),
+          plot.title = element_text(face = "bold", size = rel(1.2), hjust = .5))
+```
+
+
+
+### More advanced: `expand.grid()` + `fixef()` + `ggplot2()`  
+#### Categorical
+```{r, echo=T, eval=T}
+# example for categorical
+fixed.frame <- 
+    crossing(
+      # here, you add values for your time variable and predictors
+      Intercept = 1,
+      age0 = seq(0,10,2), 
+      groupsNone = c(0,1)) %>%
+  # now take care of interactions and add an intercept
+  mutate(`age0:groupsNone` = age0*groupsNone)
+```
+
+Before we move on, we need to calculate a few extra values. Why? Well, I like to include confidence bands around around my prediction lines, so we're going to do some weird stuff to extract what we need to do that.  
+```{r}
+# multiplying to get values for model frame
+nvar <- nrow(vcov(mod2g)) # # of variables
+varnames <- str_replace_all(colnames(vcov(mod2g)), "[()]", "") # names for vcov mat
+vcov2g <- matrix(vcov(summary(mod2g))@x, nvar) # chnage vcov mat class
+colnames(vcov2g) <- varnames; rownames(vcov2g) <- varnames # rename vcov mat
+vcov2g <- vcov2g[,-3]; vcov2g <- vcov2g[-3,]
+mat2g <- as.matrix(data.frame(unclass(fixed.frame))) # change model frame to matrix
+
+pv2g <- diag(mat2g %*% vcov2g %*% t(mat2g)) # compute variance
+fixed.frame$SE <- sqrt(pv2g) 
+fixed.frame$SE2 <- sqrt(pv2g+sigma(mod2g)^2)
+```
+
+
+Cool, we've got the standard errors we need to calculate the CI band for each point now. Moving on to predicted values, let's do a little bit of matrix algebra to get our predicted values.  
+```{r}
+fixed.frame$pred <- as.vector(as.matrix(fixed.frame) %*% fixef(mod2g)[-3])
+# minus 3 removes covariate
+
+fixed.frame %>%
+  mutate(groups = factor(groupsNone, levels = c(0,1), labels = c("Jail", "None")),
+         age = age0 + 14) %>%
+  ggplot(aes(x = age, y = pred, group = groups)) +
+  geom_ribbon(aes(ymin=pred-2*SE,ymax=pred+2*SE),alpha=0.2,fill="blue") +  
+  geom_line(aes(color = groups), size = 2) + 
+    labs(x = "Age", y = "Sensation Seeking Composite",
+         title = "2 Group Time Invariant Conditional Growth Models") +
+    theme_classic() +
+    theme(axis.text = element_text(face = "bold", size = rel(1.2)),
+          axis.title = element_text(face = "bold", size = rel(1.2)),
+          legend.title = element_text(face = "bold", size = rel(1.2)),
+          plot.title = element_text(face = "bold", size = rel(1.2), hjust = .5))
+```
+
+####Continuous
+Let's do the same thing with a continuous predictor. This is a little more complicated because we again have to calculate the mean and standard deviation to create our "new data."  
+```{r, echo = T, eval = T}
+detach(package:plyr)    
+library(dplyr)
+# example for continuous
+fixed.frame <- sample_dat %>%
+  group_by(PROC_CID) %>%
+  summarise(DemPweight = mean(DemPweight, na.rm = T)) %>%
+  ungroup() %>%
+  summarise(mean = mean(DemPweight, na.rm = T), 
+            sd = sd(DemPweight, na.rm = T))
+
+fixed.frame <- 
+  data.frame(
+    expand.grid(
+      # here, you add values for your time variable and predictors
+      age0 = seq(0,10,2), 
+      DemPweight = c(fixed.frame$mean-fixed.frame$sd,
+                     fixed.frame$mean,
+                     fixed.frame$mean+fixed.frame$sd))) %>%
+  # now take care of interactions and add an intercept
+  mutate(`age0:DemPweight` = age0*DemPweight,
+         Intercept = 1) %>%
+  # reordering everything
+  select(Intercept, everything())
+
+# multiplying to get values for model frame
+fixed.frame$value <- as.vector(as.matrix(fixed.frame) %*% fixef(mod1b))
+
+fixed.frame %>%
+  mutate(Weight = factor(DemPweight, levels = unique(DemPweight), labels = c("-1SD", "0SD", "1SD")),
+         age = age0 + 14) %>%
+  ggplot(aes(x = age, y = value, color = Weight)) +
+    geom_line(size = 2) + 
+    labs(x = "Age", y = "Sensation Seeking Composite",
+         title = "Continuous Invariant Conditional Growth Models") +
+    theme_classic() +
+    theme(axis.text = element_text(face = "bold", size = rel(1.2)),
+          axis.title = element_text(face = "bold", size = rel(1.2)),
+          legend.title = element_text(face = "bold", size = rel(1.2)),
+          plot.title = element_text(face = "bold", size = rel(1.2), hjust = .5))
+
+```
+
+
+\normalsize  
+
+### Random Effects
+We often also want to plot random effects to look at individual level trajectories / variability. Again, we need to use the `predict()` function to get these values. You can also totally use matrix algebra if you're like me and want to know what's happening "under the hood."  
+#### Categorical
+```{r}
+tbl_df(mod3g@frame) %>% select(PROC_CID, age0, groups) %>%
+  mutate(pred = predict(mod3g, newdata = .)) %>%
+  ggplot(aes(x = age0, y = pred, group = PROC_CID, color = groups)) +
+    geom_line(size = .5, alpha = .5) +
+    labs(x = "Age", y = "Predicted Sensation Seeking", 
+         title = "Predicted Random Effect Trajectories\nfor the 3 Group Model") +
+    theme_classic() +
+    theme(axis.text = element_text(face = "bold", size = rel(1.2)),
+          axis.title = element_text(face = "bold", size = rel(1.2)),
+          legend.title = element_text(face = "bold", size = rel(1.2)),
+          plot.title = element_text(face = "bold", size = rel(1.2), hjust = .5))
+```
+
+#### Categorical
+```{r}
+mod1b@frame %>% select(-SensSeek) %>%
+  mutate(pred = predict(mod1b)) %>%
+  ggplot(aes(x = age0, y = pred, group = PROC_CID, color = DemPweight)) +
+    geom_line(size = .5, alpha = .5) +
+    labs(x = "Age", y = "Predicted Sensation Seeking", 
+         title = "Predicted Random Effect Trajectories\nfor the 3 Group Model") +
+    theme_classic() +
+    theme(axis.text = element_text(face = "bold", size = rel(1.2)),
+          axis.title = element_text(face = "bold", size = rel(1.2)),
+          legend.title = element_text(face = "bold", size = rel(1.2)),
+          plot.title = element_text(face = "bold", size = rel(1.2), hjust = .5))
+```
+
+
+# Time Varying Predictors
+
+## Time Varying Predictors: Continuous
+Next, we'll add in a time-varying predictor. Maybe it's not that our participants sensation seeking is moderated by early life experiences of jail or court-ordered community service. Instead, their sensation seeking is moderated by depression.  
+How does this look?
+\begin{itemize}
+  \item \textbf{Level 1:} $Y_{ij} = \beta_{0j} + \beta_{1j}*time + \beta_{2j}*CESD + \varepsilon{ij}$
+  \item \textbf{Level 2:} 
+    \begin{itemize} 
+      \item $\beta_{0j} = \gamma_{00} + U_{0j}$
+      \item $\beta_{1j} = \gamma_{10} + U_{1j}$
+      \item $\beta_{2j} = \gamma_{20}$
+    \end{itemize}
+\end{itemize}
+
+###To Interaction or Not - That Is the Question
+\begin{itemize}
+  \item \textbf{Level 1:} $Y_{ij} = \beta_{0j} + \beta_{1j}*age0 + \beta_{2j}*CESD + \varepsilon{ij}$
+  \item \textbf{Level 2:} 
+    \begin{itemize} 
+      \item $\beta_{0j} = \gamma_{00} + U_{0j}$
+      \item $\beta_{1j} = \gamma_{10} + U_{1j}$
+      \item $\beta_{2j} = \gamma_{20}$
+    \end{itemize}
+\end{itemize}
+$$Y_{ij} =  \gamma_{00} + \gamma_{01} + U_{0j} + (\gamma_{10} + U_{1j})*age0 + \gamma_{20}*CESD$$
+
+### Example: Does depression influence changes in sensation seeking over time?
+
+\small
+```{r, results = 'hide'}
+modTV1 <- lmer(SensSeek ~ age0 + CESD + (age0|PROC_CID), data = sample_dat)
+```
+
+\small
+```{r, echo = T}
+summary(modTV1)
+```
+
+\normalsize
+
+```{r, echo = T, eval = T}
+# example for continuous
+# note MEANS ARE AT AGE0 = 0
+fixed.frame <- sample_dat %>%
+  filter(age0 == 0) %>%
+  summarise(mean = mean(CESD, na.rm = T), 
+            sd = sd(CESD, na.rm = T))
+
+fixed.frame <- 
+  data.frame(
+    expand.grid(
+      # here, you add values for your time variable and predictors
+      age0 = seq(0,10,2), 
+      DemPweight = c(fixed.frame$mean-fixed.frame$sd,
+                     fixed.frame$mean,
+                     fixed.frame$mean+fixed.frame$sd))) %>%
+  mutate(pred = predict(modTV1, newdata = ., re.form = NA))
+
+fixed.frame %>%
+  mutate(CESD = factor(CESD, levels = unique(CESD), labels = c("-1SD", "0SD", "1SD")),
+         age = age0 + 14) %>%
+  ggplot(aes(x = age, y = value, color = CESD)) +
+    geom_line(size = 2) + 
+    labs(x = "Age", y = "Sensation Seeking Composite",
+         title = "Continuous Time Varying Conditional Growth Models") +
+    theme_classic() +
+    theme(axis.text = element_text(face = "bold", size = rel(1.2)),
+          axis.title = element_text(face = "bold", size = rel(1.2)),
+          legend.title = element_text(face = "bold", size = rel(1.2)),
+          plot.title = element_text(face = "bold", size = rel(1.2), hjust = .5))
+
+```
+
+## Time Varying Predictors: Categorical
+Next, we'll add in a time-varying predictor. Maybe it's not that our participants sensation seeking is moderated by early life experiences of jail or court-ordered community service. Instead, their sensation seeking is moderated by depression.  
+How does this look?
+\begin{itemize}
+  \item \textbf{Level 1:} $Y_{ij} = \beta_{0j} + \beta_{1j}*time + \beta_{2j}*depressed + \varepsilon{ij}$
+  \item \textbf{Level 2:} 
+    \begin{itemize} 
+      \item $\beta_{0j} = \gamma_{00} + \gamma_{01} + U_{0j}$
+      \item $\beta_{1j} = \gamma_{10} + U_{1j}$
+      \item $\beta_{2j} = \gamma_{20}$
+    \end{itemize}
+\end{itemize}
+
+\small
+```{r}
+# creating a dummy variable for time varying categorical depression
+sample_dat <- sample_dat %>%
+  mutate(depressed = 
+           factor(ifelse(CESD <= 1.5, 0, 1), levels = c(0,1), 
+                  labels = c("Depressed", "Not Depressed")))
+modTV2 <- lmer(SensSeek ~ age0 + depressed + (age0|PROC_CID), 
+               data = sample_dat)
+summary(modTV2)
+```
+
+```{r}
+fixed.frame <- 
+  data.frame(expand.grid(age0 = seq(0,10,2), 
+             depressed = c("Depressed","Not Depressed"))) %>%
+  mutate(pred = predict(modTV2, newdata = ., re.form = NA))
+
+fixed.frame %>%
+  mutate(age = age0 + 14) %>%
+  ggplot(aes(x = age, y = pred, color = depressed)) +
+    geom_line(size = 2) + 
+    lims(y = c(0,4)) +
+    labs(x = "Age", y = "Sensation Seeking Composite",
+         title = "Nominal Time Varying Conditional Growth Models") +
+    theme_classic() +
+    theme(axis.text = element_text(face = "bold", size = rel(1.2)),
+          axis.title = element_text(face = "bold", size = rel(1.2)),
+          legend.title = element_text(face = "bold", size = rel(1.2)),
+          plot.title = element_text(face = "bold", size = rel(1.2), hjust = .5))
+```
+
+
+\normalsize

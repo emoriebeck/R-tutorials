@@ -1,0 +1,235 @@
+---
+title: "ANOVA and Regression"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = F, message = F)
+options(knitr.kable.NA = '')
+```
+
+```{r}
+library(psych)
+library(broom)
+library(plyr)
+library(tidyverse)
+```
+
+```{r}
+data(iris)
+iris <- iris %>% tbl_df
+```
+
+Working in personality, I spend a lot of my time performing regression, learning new regression techniques, and teching others regression. Something I find myself running up against repeatedly and trying to explain to others is that ANOVA is regression. In personality, we tend to use a lot of (so-called) continuous measures and rarely utilize experimental designs. However, in other areas of psychology, particularly social and cognitive psychology, experimental designs where comparisons across conditions are vital are more prominent. But most of the students I've worked with to assist them constructing appropriate statistical tests for their designs, particularly when specific comparisons across conditions are key, struggle to understand why the ANOVAs they've been taught are regression and how this understanding will greatly improve their abilities to work with their data and make meaningful inferences. 
+
+So let's start with the simplest case: t-tests. Why is a t-test a regression. Well, to demonstrate, let's start by looking at the procedure for an independent samples t-test, which would be appropriate to compare means between two groups in a between subjects design. 
+
+$$t = \frac{\bar{x}_1 - \bar{x}_2}{s_p\sqrt{\frac{1}{n_1} + \frac{1}{n_2}}}$$  
+
+where  
+
+$$s_p = \sqrt{\frac{(n_1 - 1)s^2_1 + (n_2 - 1)s^2_2}{n_1 + n_2 -2}}$$  
+
+This is the approach that we typically teach students in statistics courses in psychology, but I find it slighlty more intuitive from a matrix algebra standpoint. The matrix algebra approach will also be important once we move on to the regression comparison. 
+
+The basic matrix formulation for regression is as follows: 
+$$\mathbf{\hat{y}} = \mathbf{X}\mathbf{w}$$  
+where $\mathbf{w}$ is a 1 x p column vector of the following form:  
+
+$$
+\begin{bmatrix}
+w_1\\
+w_2\\
+ ... \\
+w_p 
+\end{bmatrix}
+$$
+
+estimated as follows: 
+$$\mathbf{w} = (\mathbf{X}^T\mathbf{X})^{-1}\mathbf{X}^T$$  
+
+$(\mathbf{X}^T\mathbf{X})^{-1}\mathbf{X}^T$ is the so-called pseudo-inverse of the matrix $\mathbf{X}$ given that $\mathbf{X}$ is invertible. 
+
+In this case, X would be a N x p matrix as follows: 
+
+$$\begin{bmatrix}
+& \mathbf{x}^T_1 & \\
+& \mathbf{x}^T_2 & \\
+& ... & \\
+& \mathbf{x}^T_N & 
+\end{bmatrix}$$
+ 
+In this case, rows of the matrix $\mathbf{X}$ represent observations across $p$ predictors. Each row is then a column vector $\mathbf{x}_N$. We takes its transpose to make it a row vector. 
+
+The observed outcome vector $\mathbf{y}$ is a 1 x N column vector of the following form:  
+$$\begin{bmatrix}
+y_1\\
+y_2\\
+ ... \\
+y_N 
+\end{bmatrix}$$
+
+In the case of a t-test, the predictor matrix $\mathbf{X}$ is a 1 x N matrix, where each $\mathbf{x}_N$ is an effects coded value (-1, 1). 
+
+In R, we can constuct this matrix using the `model.matrix()` function:
+
+```{r}
+iris2 <- iris %>% filter(Species != "setosa") %>% mutate(Species = factor(Species))
+contrasts(iris2$Species) <- contr.sum(2)
+X <- model.matrix(~ Species, data = iris2)
+y <- iris2$Sepal.Length
+
+head(X)
+
+head(y)
+```
+
+Linear algebra method: 
+```{r}
+(t(w <- solve(crossprod(X), crossprod(X,y))))
+
+# predicted values
+yhat <- X %*% w
+
+# degrees of freedom
+n <- nrow(X)
+df_den <- n - length(unique(iris2$Species)) 
+
+## Sums of squares
+(SS_res   <- sum((y-yhat)^2))
+(MS_res <- SS_res/df_den)
+
+(ses <- sqrt(diag(MS_res * solve(crossprod(X)))))
+
+(ts <- w/ses)
+
+(ps <- sapply(ts, function(x) 1-pt(x, df = df_den)))
+```
+
+Built in R function for a linear model:  
+```{r}
+sqrt(summary(lm(Sepal.Length ~ Species, data = iris2))$fstatistic[1])
+```
+
+Notice we've lost our negative here. 
+
+Built in R function for a t-test
+```{r}
+(t.test(Sepal.Length ~ Species, data = iris2))
+```
+
+Using matrix algebra, `lm()`, and `t.test()` result in identical estimates of the means of the groups as well as their mean difference. 
+
+So t-tests are identical to a regression with an effects coded linear model predicting a continuous variable from a nominal predictor.  
+
+```{r}
+# predicted values
+yhat <- X %*% w
+
+# degrees of freedom
+n <- nrow(X)
+df_den <- n - length(unique(iris2$Species)) 
+
+## Sums of squares
+(SS_res   <- sum((y-yhat)^2))
+(MS_res <- SS_res/df_den)
+
+(ses <- sqrt(diag(MS_res * solve(crossprod(X)))))
+
+(ts <- w/ses)
+
+(ps <- sapply(ts, function(x) 1-pt(x, df = df_den)))
+
+t.test(Sepal.Length ~ Species, data = iris2)
+```
+
+
+The same extends to tests of differences between more than two means -- a so-called omnibus analysis of variance. *ANOVA is simply a regression with an effects coded nominal variable*. 
+
+What is effects coding? It's a form of contrast coding that results in coefficients that directly compare a mean to the grand mean: ($X_m - \bar{X}$), which likely looks familiar from formulas to calculate Sums of Squares used to calculate coefficients in an ANOVA. 
+
+```{r}
+contrasts(iris$Species) <- contr.sum(3)
+X <- model.matrix(~ Species, data = iris)
+y <- iris$Sepal.Length
+
+head(X)
+
+head(y)
+
+(t(w <- solve(crossprod(X), crossprod(X,y))))
+
+coef(lm(Sepal.Length ~ Species, data = iris))
+```
+
+```{r}
+yhat <- X %*% w
+
+n <- nrow(X)
+df_num <- length(unique(iris$Species)) - 1
+df_den <- n - length(unique(iris$Species)) 
+
+SS_total <- sum((y-mean(y))^2)
+(SS_reg   <- sum((yhat-mean(y))^2))
+(SS_res   <- sum((y-yhat)^2))
+
+(MS_reg <- SS_reg/df_num)
+
+(MS_res <- SS_res/df_den)
+
+(F <- MS_reg/MS_res)
+(p <- (1-pf(F, df_num, df_den))*2)
+
+anova(lm(Sepal.Length ~ Species, data = iris))
+```
+
+The problem with this is that it clearly tells us that there are differences in sepal lengths for different species, but we don't know where those differences are. To delineate where those are, you conduct follow-up t-tests, but I've already shown that these are just regressions. Plus, you lose power when doing follow-ups of that kind because you're effectively tossing out some of your sample, which are used to estimate the grand mean and Sums of Squares.  
+
+The best approach, in my opinion is to pre-specify the comparisons you want to do. Then, rather than running an ANOVA, you can simply run a regression where the terms of the model will provide the follow-up comparisons you are already interested in. Or you can follow up with additional comparisons that may not be tested in the model using a package like the `multcomp` package in R that allow you specify linear combinations of your predictors to test coefficients for those combinations. 
+
+I'm going to show you an example of both to demonstrate. Say with our iris data, we are interested in the comparing sepal length of both the versicolor and setosa irises to the virginica iris. In this case, rather than using effects coding in which the terms of the model will be differences from the grand mean across all 3 groups, we might choose a more informative form of coding that compares each of the other two irises to the virginica iris: dummy coding.
+
+In R, we specify that using `contr.treatment()`, where the only argument is the number of levels of the nominal variable. Note that this is the default form of coding in R. 
+
+```{r}
+contrasts(iris$Species) <- contr.treatment(3)
+
+contrasts(iris$Species)
+```
+
+What do these mean? Well, the columns specify the contrasts which will be entered as separate dummy codes in the model. So the "2" column means the literal data frame we will feed into the model will be 1 when the iris is a versicolor iris and 0 otherwise. The "3" column means the literal data frame we will feed into the model will be 1 when the iris is a virginica iris and 0 otherwise. When the iris is a setosa iris, both the "2" and "3" columns will be 0. In that case, the only term in the model will be the intercept, which will be the mean of the sepal lengths of setosa irises. The "2" and "3" coefficients then, once estimated, will represent the average *differences* between the versicolor and setosa irises and the viriginica and setosa irises, respectively. In other words, we are getting direct comparisons of means between different levels of the groups rather than just knowing that "some groups are different" as we do with an omnibus ANOVA.
+
+We have a problem, though. This wasn't the comparison I said I cared about. I wanted to compare setosa and versicolor irises to the virginica iris. To do this, I just need to relevel the factor: 
+
+```{r}
+iris$Species <- relevel(iris$Species, ref = "virginica")
+
+contrasts(iris$Species) <- contr.treatment(3)
+
+contrasts(iris$Species)
+```
+
+Yay! Now, the "2" coefficient will be the difference between setosa and virginica and the "3" coefficient will be the difference between the versicolor iris and the setosa iris. 
+
+```{r}
+summary(lm(Sepal.Length ~ Species, data = iris))
+```
+
+But we might want to test more interesting hypotheses: 
+1. Are virginica iris sepal length different from the average sepal length of the others (collapsed across them)?  
+2. Does the virginica iris have twice the sepal length of the setosa iris?  
+
+We can answer those using linear combinations:
+```{r}
+cmat <- matrix(c(
+# intercept    Species1      Species2
+c(1,           -.5,          -.5      ),
+c(2,           -1,             0      )), nrow = 2, byrow = 2)
+rownames(cmat) <- c("Virginica v. Setosa + Versicolor",
+                    "2 * Virginica v. Setosa")
+
+multcomp::glht(lm(Sepal.Length ~ Species, data = iris), linfct = cmat)
+```
+
+
+
