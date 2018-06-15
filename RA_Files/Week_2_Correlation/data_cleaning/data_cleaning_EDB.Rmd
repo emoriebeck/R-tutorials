@@ -1,8 +1,17 @@
 ---
 title: "Data Cleaning"
-author: "Emorie Beck"
-date: "\today"
-output: html_document
+author: 
+  - "Emorie D Beck"
+date: "`r Sys.setlocale('LC_TIME', 'C'); format(Sys.time(), '%d\\\\. %B %Y')`"
+output:
+  html_document:
+    theme: united
+    highlight: tango
+    df_print: paged
+    code_folding: show
+    toc: true
+    toc_float: true
+    toc_depth: 2
 ---
 
 ```{r setup, include=FALSE}
@@ -21,6 +30,7 @@ First, we start by loading the packages and data we'll need.
 library(psych)
 library(plyr)
 library(tidyverse)
+library(broom)
 ```
 
 ## Load Data
@@ -31,7 +41,7 @@ library(tidyverse)
 # example wd <- "~/Dropbox/Summer 2018"
 # add your file path below
 
-wd <- "~/Dropbox (Brown)/Summer 2018/RA Files/Week 2 Correlation/data cleaning"
+wd <- "https://github.com/emoriebeck/R-tutorials/blob/master/RA_Files/Week_2_Correlation/data_cleaning"
 
 # now let's load the data. I like to use something like the line below, which uses 
 # the `sprintf()` function to merge the file path with the name of the file
@@ -39,7 +49,7 @@ wd <- "~/Dropbox (Brown)/Summer 2018/RA Files/Week 2 Correlation/data cleaning"
 # pairsW1 <- read.csv(file, stringsAsFactors = F)
 # do this below
 
-file <- sprintf("%s/home_w1_redacted.csv", wd)
+file <- url(sprintf("%s/home_w1_redacted.csv?raw=true", wd))
 pairsW1 <- file %>% readr::read_csv()
 ```
 
@@ -64,7 +74,9 @@ When I work with data, I'm usually pulling a few variables from data sets that m
 # codebook <- sprintf("%s/codebook.xlsx")
 # codebook <- readxl::read_xlsx(codebook)
 
-codebook <- sprintf("%s/Codebook.xlsx", wd) %>% readxl::read_xlsx()
+destfile <- "Codebook.xlsx"
+curl::curl_download(sprintf("%s/Codebook.xlsx?raw=true", wd), destfile)
+codebook <- readxl::read_excel(destfile)
 
 # Now we need to find a way to match the variables in the codebook with the variables in 
 # your data. I'm not going to give you explicit instructions. Struggle a bit, and try 
@@ -207,12 +219,12 @@ coef(fitE)
 
 `residuals()`, which prints the residuals of the model  
 ```{r}
-residuals(fitE)
+head(residuals(fitE))
 ```
 
 `predict()`, which generates predicted values for all the observations of X, using the model  
 ```{r}
-predict(fitE)
+head(predict(fitE))
 ```
 
 ## The tidy solution  
@@ -233,3 +245,74 @@ glance(fitE)
 ```{r}
 augment(fitE)
 ```
+
+# Assumptions
+## 1. No measurement Error
+
+- influence our ability to control and predict  
+- this will never occur with psychological data  
+- how bad is it if we don't meet this assumption  
+- the better you assess you DV's or IV's, the more you can trust your models  
+- you can test this by assessing the reliability of your measures using Cronbach's alpha
+
+Run Cronbach's Alpha - this is actually a really scale to check. We just need something demonstrative. 
+```{r}
+psych::alpha(pairsW1.tidy %>% select(contains("BFI.E_")))
+```
+
+### 2. Correctly specified form
+
+- make sure you are measuring what you think you are measuring?  
+- Are you using the correct model?  
+
+```{r}
+a_data <- broom::augment(fitE)
+
+ggplot(a_data, aes(.fitted, .resid)) + 
+  geom_point() + 
+  geom_smooth(method = "lm", se = F) + 
+  theme_bw()
+```
+
+###3. No omitted variables  
+
+- there are infinite amount of things  
+- this is another assumption you will never meet  
+- basically look for hidden moderators and third variables  
+
+### 4. Homoscedasticity   
+
+- conditional variance of residuals aross all levels of X is constant   
+- if violated = heteroscedasticity  
+- make sure there is constant error variance among all of the X's  
+- Residuals v. predict*ors*
+```{r}
+ggplot(a_data, aes(x = BFI.E, y = .resid)) + 
+  geom_point() + 
+  geom_smooth(method = "lm", se = F) +
+  theme_classic()
+```
+
+### 5. Independence among the residuals  
+
+- issues with group, family, longitudinal, and nested designs  
+- take care of this with different types of models (e.g ml models)  
+- want to see that the residuals don't look different across time  
+
+###6. Normally Distributed Residuals
+
+```{r}
+ggplot(a_data, aes(x = .resid)) + 
+  geom_density() + 
+  theme_classic()
+
+## Q-Q plot
+# dark line is the theoretical normal distribution
+# data points for those are close to theoretical
+# dotted lines are the confidence bands around it
+# want the data points within the confidence bands
+# if there are just a couple outside of this, it isn't a huge deal
+library(car)
+qqPlot(fitE)
+```
+
