@@ -1,0 +1,332 @@
+---
+title: "R Notebook"
+output: html_notebook
+editor_options: 
+  chunk_output_type: console
+---
+
+# Workspace
+## Packages
+```{r}
+library(psych)
+library(plyr)
+library(tidyverse)
+```
+
+## Data
+### IPIP20
+```{r}
+# load data
+ipip20 <- read_csv("~/Dropbox (Brown)/Summer 2018/RA Files/Week 1 Scales/data/ipip20.csv")
+```
+
+### IPIP50  
+```{r}
+# load data
+ipip50 <- read_csv("~/Dropbox (Brown)/Summer 2018/RA Files/Week 1 Scales/data/ipip50.csv")
+```
+
+### IPIP100
+```{r}
+# load data
+ipip100 <- read_csv("~/Dropbox (Brown)/Summer 2018/RA Files/Week 1 Scales/data/ipip100.csv")
+```
+
+# Inter-Item Correlations  
+## IPIP20
+```{r}
+a <- ipip20 %>% select(contains("Agreeableness"))
+c <- ipip20 %>% select(contains("Conscientiousness"))
+e <- ipip20 %>% select(contains("Extraversion"))
+n <- ipip20 %>% select(contains("EmotionalStability"))
+o <- ipip20 %>% select(contains("Intellect"))
+
+(r_a <- cor(a, use = "pairwise"))
+(r_c <- cor(c, use = "pairwise"))
+(r_e <- cor(e, use = "pairwise"))
+(r_n <- cor(n, use = "pairwise"))
+(r_o <- cor(o, use = "pairwise"))
+```
+
+
+## Reverse Coding
+```{r}
+load("~/Dropbox (Brown)/Summer 2018/RA Files/Week 1 Scales/data/keys.RData")
+
+keys20 <- ipip20_items$rev_code
+keys50 <- ipip50_items$rev_code
+keys100 <- ipip100_items$rev_code
+
+ipip20[5:24] <- reverse.code(ipip20[5:24], keys = keys20)
+ipip50[5:54] <- reverse.code(ipip50[5:54], keys = keys50)
+ipip100[5:104] <- reverse.code(ipip100[5:104], keys = keys100)
+```
+
+## Back to IPIP20
+```{r}
+a20 <- ipip20 %>% select(contains("Agreeableness"))
+c20 <- ipip20 %>% select(contains("Conscientiousness"))
+e20 <- ipip20 %>% select(contains("Extraversion"))
+n20 <- ipip20 %>% select(contains("EmotionalStability"))
+o20 <- ipip20 %>% select(contains("Intellect"))
+
+(r_a20 <- cor(a20, use = "pairwise"))
+(r_c20 <- cor(c20, use = "pairwise"))
+(r_e20 <- cor(e20, use = "pairwise"))
+(r_n20 <- cor(n20, use = "pairwise"))
+(r_o20 <- cor(o20, use = "pairwise"))
+```
+
+## IPIP50
+```{r}
+a50 <- ipip50 %>% select(contains("Agreeableness"))
+c50 <- ipip50 %>% select(contains("Conscientiousness"))
+e50 <- ipip50 %>% select(contains("Extraversion"))
+n50 <- ipip50 %>% select(contains("EmotionalStability"))
+o50 <- ipip50 %>% select(contains("Intellect"))
+
+(r_a50 <- cor(a50, use = "pairwise"))
+(r_c50 <- cor(c50, use = "pairwise"))
+(r_e50 <- cor(e50, use = "pairwise"))
+(r_n50 <- cor(n50, use = "pairwise"))
+(r_o50 <- cor(o50, use = "pairwise"))
+```
+
+## IPIP100
+```{r}
+a100 <- ipip100 %>% select(contains("Agreeableness"))
+c100 <- ipip100 %>% select(contains("Conscientiousness"))
+e100 <- ipip100 %>% select(contains("Extraversion"))
+n100 <- ipip100 %>% select(contains("EmotionalStability"))
+o100 <- ipip100 %>% select(contains("Intellect"))
+
+(r_a100 <- cor(a100, use = "pairwise"))
+(r_c100 <- cor(c100, use = "pairwise"))
+(r_e100 <- cor(e100, use = "pairwise"))
+(r_n100 <- cor(n100, use = "pairwise"))
+(r_o100 <- cor(o100, use = "pairwise"))
+```
+
+
+## Average Inter-Item Correlations  
+
+```{r}
+r_a20[lower.tri(r_a20, diag = T)] <- NA
+r_c20[lower.tri(r_c20, diag = T)] <- NA
+r_e20[lower.tri(r_e20, diag = T)] <- NA
+r_n20[lower.tri(r_n20, diag = T)] <- NA
+r_o20[lower.tri(r_o20, diag = T)] <- NA
+
+mean(r_a20, na.rm = T)
+mean(r_c20, na.rm = T)
+mean(r_e20, na.rm = T)
+mean(r_n20, na.rm = T)
+mean(r_o20, na.rm = T)
+```
+
+```{r}
+r_a50[lower.tri(r_a50, diag = T)] <- NA
+r_c50[lower.tri(r_c50, diag = T)] <- NA
+r_e50[lower.tri(r_e50, diag = T)] <- NA
+r_n50[lower.tri(r_n50, diag = T)] <- NA
+r_o50[lower.tri(r_o50, diag = T)] <- NA
+
+mean(r_a50, na.rm = T)
+mean(r_c50, na.rm = T)
+mean(r_e50, na.rm = T)
+mean(r_n50, na.rm = T)
+mean(r_o50, na.rm = T)
+```
+
+```{r}
+r_a100[lower.tri(r_a100, diag = T)] <- NA
+r_c100[lower.tri(r_c100, diag = T)] <- NA
+r_e100[lower.tri(r_e100, diag = T)] <- NA
+r_n100[lower.tri(r_n100, diag = T)] <- NA
+r_o100[lower.tri(r_o100, diag = T)] <- NA
+
+mean(r_a100, na.rm = T)
+mean(r_c100, na.rm = T)
+mean(r_e100, na.rm = T)
+mean(r_n100, na.rm = T)
+mean(r_o100, na.rm = T)
+```
+
+# Item-Total Correlations  
+## Manual Method  
+
+### IPIP20  
+```{r}
+(a20_itr <- cor(a20, rowMeans(a20, na.rm = T), use = "pairwise"))
+(c20_itr <- cor(c20, rowMeans(c20, na.rm = T), use = "pairwise"))
+(e20_itr <- cor(e20, rowMeans(e20, na.rm = T), use = "pairwise"))
+(n20_itr <- cor(n20, rowMeans(n20, na.rm = T), use = "pairwise"))
+(o20_itr <- cor(o20, rowMeans(o20, na.rm = T), use = "pairwise"))
+
+mean(a20_itr)
+mean(c20_itr)
+mean(e20_itr)
+mean(n20_itr)
+mean(o20_itr)
+```
+
+### IPIP50  
+```{r}
+(a50_itr <- cor(a50, rowMeans(a50, na.rm = T), use = "pairwise"))
+(c50_itr <- cor(c50, rowMeans(c50, na.rm = T), use = "pairwise"))
+(e50_itr <- cor(e50, rowMeans(e50, na.rm = T), use = "pairwise"))
+(n50_itr <- cor(n50, rowMeans(n50, na.rm = T), use = "pairwise"))
+(o50_itr <- cor(o50, rowMeans(o50, na.rm = T), use = "pairwise"))
+
+mean(a50_itr)
+mean(c50_itr)
+mean(e50_itr)
+mean(n50_itr)
+mean(o50_itr)
+```
+
+### IPIP100  
+```{r}
+(a100_itr <- cor(a100, rowMeans(a100, na.rm = T), use = "pairwise"))
+(c100_itr <- cor(c100, rowMeans(c100, na.rm = T), use = "pairwise"))
+(e100_itr <- cor(e100, rowMeans(e100, na.rm = T), use = "pairwise"))
+(n100_itr <- cor(n100, rowMeans(n100, na.rm = T), use = "pairwise"))
+(o100_itr <- cor(o100, rowMeans(o100, na.rm = T), use = "pairwise"))
+
+mean(a100_itr)
+mean(c100_itr)
+mean(e100_itr)
+mean(n100_itr)
+mean(o100_itr)
+```
+
+## `psych` package  
+### IPIP20  
+```{r}
+(a20_alpha <- psych::alpha(a20))
+(c20_alpha <- psych::alpha(c20))
+(e20_alpha <- psych::alpha(e20))
+(n20_alpha <- psych::alpha(n20))
+(o20_alpha <- psych::alpha(o20))
+
+a20_alpha$item.stats
+c20_alpha$item.stats
+e20_alpha$item.stats
+n20_alpha$item.stats
+o20_alpha$item.stats
+```
+
+### IPIP50  
+```{r}
+(a50_alpha <- psych::alpha(a50))
+(c50_alpha <- psych::alpha(c50))
+(e50_alpha <- psych::alpha(e50))
+(n50_alpha <- psych::alpha(n50))
+(o50_alpha <- psych::alpha(o50))
+
+a50_alpha$item.stats
+c50_alpha$item.stats
+e50_alpha$item.stats
+n50_alpha$item.stats
+o50_alpha$item.stats
+```
+
+### IPIP100  
+```{r}
+(a100_alpha <- psych::alpha(a100))
+(c100_alpha <- psych::alpha(c100))
+(e100_alpha <- psych::alpha(e100))
+(n100_alpha <- psych::alpha(n100))
+(o100_alpha <- psych::alpha(o100))
+
+a100_alpha$item.stats
+c100_alpha$item.stats
+e100_alpha$item.stats
+n100_alpha$item.stats
+o100_alpha$item.stats
+```
+
+# Split-Half Reliability
+## Manual Method  
+### IPIP20  
+```{r}
+cor(rowMeans(a20[,1:2]), rowMeans(a20[,3:4]))
+cor(rowMeans(c20[,1:2]), rowMeans(c20[,3:4]))
+cor(rowMeans(e20[,1:2]), rowMeans(e20[,3:4]))
+cor(rowMeans(n20[,1:2]), rowMeans(n20[,3:4]))
+cor(rowMeans(o20[,1:2]), rowMeans(o20[,3:4]))
+```
+
+### IPIP50  
+```{r}
+cor(rowMeans(a50[,1:5]), rowMeans(a50[,6:10]))
+cor(rowMeans(c50[,1:5]), rowMeans(c50[,6:10]))
+cor(rowMeans(e50[,1:5]), rowMeans(e50[,6:10]))
+cor(rowMeans(n50[,1:5]), rowMeans(n50[,6:10]))
+cor(rowMeans(o50[,1:5]), rowMeans(o50[,6:10]))
+```
+
+### IPIP100   
+```{r}
+cor(rowMeans(a100[,1:10]), rowMeans(a100[,11:10]))
+cor(rowMeans(c100[,1:10]), rowMeans(c100[,11:10]))
+cor(rowMeans(e100[,1:10]), rowMeans(e100[,11:10]))
+cor(rowMeans(n100[,1:10]), rowMeans(n100[,11:10]))
+cor(rowMeans(o100[,1:10]), rowMeans(o100[,11:10]))
+```
+
+## `psych` package
+### IPIP20  
+```{r}
+splitHalf(a20)
+splitHalf(c20)
+splitHalf(e20)
+splitHalf(n20)
+splitHalf(o20)
+```
+
+### IPIP50  
+```{r}
+splitHalf(a50)
+splitHalf(c50)
+splitHalf(e50)
+splitHalf(n50)
+splitHalf(o50)
+```
+
+### IPIP100  
+```{r}
+splitHalf(a100)
+splitHalf(c100)
+splitHalf(e100)
+splitHalf(n100)
+splitHalf(o100)
+```
+
+# Cronbach's alpha
+```{r}
+a20_alpha$total
+c20_alpha$total
+e20_alpha$total
+n20_alpha$total
+o20_alpha$total
+```
+
+```{r}
+a50_alpha$total
+c50_alpha$total
+e50_alpha$total
+n50_alpha$total
+o50_alpha$total
+```
+
+```{r}
+a100_alpha$total
+c100_alpha$total
+e100_alpha$total
+n100_alpha$total
+o100_alpha$total
+```
+
+# Scale Development  
+

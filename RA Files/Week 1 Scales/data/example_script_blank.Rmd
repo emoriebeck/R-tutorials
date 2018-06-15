@@ -1,0 +1,176 @@
+---
+title: "R Notebook"
+output: html_notebook
+editor_options: 
+  chunk_output_type: console
+---
+
+# Workspace
+## Packages
+```{r}
+library(psych)
+library(plyr)
+library(tidyverse)
+```
+
+## Data
+### IPIP20
+```{r}
+# load data
+ipip20 <- read_csv("~/Dropbox (Brown)/Summer 2018/RA Files/Week 1 Scales/data/ipip20.csv")
+```
+
+### IPIP50  
+```{r}
+# load data
+ipip50 <- read_csv("~/Dropbox (Brown)/Summer 2018/RA Files/Week 1 Scales/data/ipip50.csv")
+```
+
+### IPIP100
+```{r}
+# load data
+ipip100 <- read_csv("~/Dropbox (Brown)/Summer 2018/RA Files/Week 1 Scales/data/ipip100.csv")
+```
+
+# Inter-Item Correlations  
+## IPIP20
+```{r}
+a <- ipip20 %>% select(contains("Agreeableness"))
+
+(r_a <- cor(a, use = "pairwise"))
+```
+
+
+## Reverse Coding
+```{r}
+load("~/Dropbox (Brown)/Summer 2018/RA Files/Week 1 Scales/data/keys.RData")
+
+keys20 <- ipip20_items$rev_code
+
+ipip20[5:24] <- reverse.code(ipip20[5:24], keys = keys20)
+```
+
+## Back to IPIP20
+```{r}
+a20 <- ipip20 %>% select(contains("Agreeableness"))
+
+(r_a20 <- cor(a20, use = "pairwise"))
+```
+
+## IPIP50
+```{r}
+# add code here
+```
+
+## IPIP100
+```{r}
+# add code here
+```
+
+
+## Average Inter-Item Correlations  
+
+### IPIP20
+```{r}
+r_a20[lower.tri(r_a20, diag = T)] <- NA
+
+mean(r_a20, na.rm = T)
+```
+
+### IPIP50  
+```{r}
+# add code here
+```
+
+### IPIP100  
+```{r}
+
+```
+
+# Item-Total Correlations  
+## Manual Method  
+
+### IPIP20  
+```{r}
+(a20_itr <- cor(a20, rowMeans(a20, na.rm = T), use = "pairwise"))
+```
+
+### IPIP50  
+```{r}
+# add code here
+```
+
+### IPIP100  
+```{r}
+# add code here
+```
+
+## `psych` package  
+### IPIP20  
+```{r}
+(a20_alpha <- psych::alpha(a20))
+
+a20_alpha$item.stats
+```
+
+### IPIP50  
+```{r}
+# add code here
+```
+
+### IPIP100  
+```{r}
+# add code here
+```
+
+# Split-Half Reliability
+## Manual Method  
+### IPIP20  
+```{r}
+cor(rowMeans(a20[,1:2]), rowMeans(a20[,3:4]))
+```
+
+### IPIP50  
+```{r}
+# add code here
+```
+
+### IPIP100   
+```{r}
+# add code here
+```
+
+## `psych` package
+### IPIP20  
+```{r}
+splitHalf(a20)
+```
+
+### IPIP50  
+```{r}
+# add code here
+```
+
+### IPIP100  
+```{r}
+# add code here
+```
+
+# Cronbach's alpha
+## IPIP20  
+```{r}
+a20_alpha$total
+```
+
+## IPIP50  
+```{r}
+# add code here
+```
+
+## IPIP100
+```{r}
+# add code here
+```
+
+# Scale Development  
+
