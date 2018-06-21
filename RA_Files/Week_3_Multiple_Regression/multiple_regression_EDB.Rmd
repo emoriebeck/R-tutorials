@@ -12,6 +12,8 @@ output:
     toc: true
     toc_float: true
     toc_depth: 2
+editor_options: 
+  chunk_output_type: console
 ---
 
 ```{r setup, include=FALSE}
@@ -32,7 +34,7 @@ library(tidyverse)
 ```{r}
 wd <- "https://github.com/emoriebeck/R-tutorials/raw/master/RA_Files/Week_3_Multiple_Regression"
 load(url(sprintf("%s/SAPAdata18aug2010thru7feb2017.rdata", wd)))
-ipip100 <- SAPAdata18aug2010thru7feb2017
+ipip100 <- SAPAdata18aug2010thru7feb2017 %>% tbl_df
 ```
 
 These data are organized differently than others we've worked with in the past. There are going to be 4 key objects once you load them: 
@@ -50,10 +52,11 @@ To start, let's trim out data frame.
 # old_items <- ItemLists$IPIP100
 old_items <- c(ItemLists$IPIP100, "q_55")
 
-# remove all columns except the items for the IPIP 100 and all the background variables  
+# remove all columns except the items for the IPIP 100 and all the background variables 
+
 # tidyverse
-ipip100 <- ipip100 %>% select(RID:EthDiv, one_of(old_items))
-# equivalent: ipip100 <- ipip100 %>% select(-contains("^q_"), one_of(old_items))
+ipip100 <- ipip100 %>% select(RID:EthDiv, old_items)
+# equivalent: ipip100 <- ipip100 %>% select(contains("^q_"), one_of(old_items))
 
 # base R
 dem_items <- colnames(ipip100)[!(grepl("^q_", colnames(ipip100)))]
@@ -99,7 +102,7 @@ old\_item   |   new\_item     | item\_text    | keys
            keys.list$IPIP100EmotionalStability20,
            keys.list$IPIP100intellect20)
   ) %>%
-  mutate(key = ifelse(grepl("-", old_item) == T, -1, 1),
+  mutate(key = ifelse(grepl("-", old_item), -1, 1),
          old_item = str_remove(old_item, "-"))) 
 
 # there's one missing key (a mistake in the keys.list object), so we'll add it in manually
@@ -109,7 +112,7 @@ keys <- keys %>% bind_rows(tibble(old_item = "q_55", key = 1))
 (codebook <- codebook %>% full_join(keys))
 
 ipip100 <- ipip100 %>% tbl_df %>%
-  select(dem_items, one_of(codebook$old_item)) %>%
+  select(dem_items, codebook$old_item) %>%
   setNames(c(dem_items, codebook$new_item))
 ```
 
@@ -135,7 +138,7 @@ For these data, we have lots of items, so we don't just want to create composite
 # the `cbind()` function within `rowMeans()`. Don't forget to set na.rm = T
 
 # personality
-items <- codebook$new_item[grepl("IPIP100:E", codebook$new_item)]
+items <- codebook$new_item[grepl("IPIP100:E_", codebook$new_item)]
 ipip100$ipip100.E <- rowMeans(ipip100[,items], na.rm = T)
 
 items <- codebook$new_item[grepl("IPIP100:A", codebook$new_item)]
@@ -151,7 +154,7 @@ items <- codebook$new_item[grepl("IPIP100:I", codebook$new_item)]
 ipip100$ipip100.O <- rowMeans(ipip100[,items], na.rm = T)
 
 ipip100 <- ipip100 %>% 
-  mutate_all(funs(mapvalues(., c(NaN, Inf, -Inf), c(NA, NA, NA), warn_missing = F)))
+  mutate_all(funs(mapvalues(., from = c(NaN, Inf, -Inf), to = c(NA, NA, NA), warn_missing = F)))
 ```
 
 # Multiple Regression
