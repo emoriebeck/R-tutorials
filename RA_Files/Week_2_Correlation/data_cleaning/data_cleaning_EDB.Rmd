@@ -12,6 +12,8 @@ output:
     toc: true
     toc_float: true
     toc_depth: 2
+editor_options: 
+  chunk_output_type: console
 ---
 
 ```{r setup, include=FALSE}
@@ -21,7 +23,7 @@ knitr::opts_chunk$set(echo = TRUE)
 # Workspace
 First, we start by loading the packages and data we'll need.
 
-## Packages
+## Packages  
 ```{r}
 # add packages here. I'd suggest starting with tidyverse, but there are others you 
 # may want to add as well
@@ -49,12 +51,16 @@ wd <- "https://github.com/emoriebeck/R-tutorials/blob/master/RA_Files/Week_2_Cor
 # pairsW1 <- read.csv(file, stringsAsFactors = F)
 # do this below
 
+
+file <- paste(wd, "home_w1_redacted.csv?raw=true", sep = "/")
 file <- url(sprintf("%s/home_w1_redacted.csv?raw=true", wd))
 pairsW1 <- file %>% readr::read_csv()
+
+pairsW1
 ```
 
 # Preparation and Data Cleaning
-Now that the data are loaded, we usually need to make modifications, keeping some columns, removing others, creating composites, apply exclusion criteria, etc.
+Now that the data are loaded, we usually need to make modifications, keeping some columns, removing others, creating composites, apply exclusion criteria, etc.  
 
 ## Descriptives  
 To do this, it's usually smart to look at some descriptives of your data, especially if you aren't very familiar with it. 
@@ -93,7 +99,7 @@ new_names <- codebook$new_name
 # remember what you learned in the intro to tidyverse data camp course
 
 # base R way
-pairsW1.base <- pairsW1[,paste(old_names, "w1", sep = ".")] 
+pairsW1.base           <- pairsW1[,paste(old_names, "w1", sep = ".")] 
 colnames(pairsW1.base) <- new_names
 
 # dplyr way
@@ -118,7 +124,7 @@ pairsW1.base <- data.frame(pairsW1.base)
 pairsW1.psych <- scrub(pairsW1.tidy, new_names, isvalue = -7, newvalue = NA_real_)
 
 # tidyverse
-pairsW1.tidy <- pairsW1.tidy %>% mutate_all(funs(mapvalues(., -7, NA_real_, warn_missing = F)))
+pairsW1.tidy <- pairsW1.tidy %>% mutate_all(funs(mapvalues(., from = -7, to = NA_real_, warn_missing = F)))
 ```
 
 # Recode Variables  
@@ -165,7 +171,8 @@ pairsW1.tidy <- pairsW1.tidy %>%
   group_by(SID, scale) %>% 
   summarize(value = mean(value, na.rm = T)) %>%
   spread(key = scale, value = value) %>%
-  full_join(pairsW1.tidy) %>% ungroup() 
+  full_join(pairsW1.tidy) %>% 
+  ungroup() 
 
 # Now, try the base R way. 
 # hint: try using the function `rowMeans()`. You can select multiple columns using 
@@ -194,7 +201,7 @@ pairsW1.base$lifesat <- rowMeans(pairsW1.base[,items], na.rm = T)
 
 # Zero-Order Correlations  
 ```{r}
-r <- cor(pairsW1.tidy %>% select(BFI.A:Sat))
+round(cor(pairsW1.tidy %>% select(BFI.A:Sat), use = "pairwise"),2)
 
 print(corr.test(pairsW1.tidy %>% select(BFI.A:Sat)), short = F)
 ```
@@ -260,7 +267,7 @@ Run Cronbach's Alpha - this is actually a really scale to check. We just need so
 psych::alpha(pairsW1.tidy %>% select(contains("BFI.E_")))
 ```
 
-### 2. Correctly specified form
+## 2. Correctly specified form
 
 - make sure you are measuring what you think you are measuring?  
 - Are you using the correct model?  
@@ -274,13 +281,13 @@ ggplot(a_data, aes(.fitted, .resid)) +
   theme_bw()
 ```
 
-###3. No omitted variables  
+## 3. No omitted variables  
 
 - there are infinite amount of things  
 - this is another assumption you will never meet  
 - basically look for hidden moderators and third variables  
 
-### 4. Homoscedasticity   
+## 4. Homoscedasticity   
 
 - conditional variance of residuals aross all levels of X is constant   
 - if violated = heteroscedasticity  
@@ -293,13 +300,13 @@ ggplot(a_data, aes(x = BFI.E, y = .resid)) +
   theme_classic()
 ```
 
-### 5. Independence among the residuals  
+## 5. Independence among the residuals  
 
 - issues with group, family, longitudinal, and nested designs  
 - take care of this with different types of models (e.g ml models)  
 - want to see that the residuals don't look different across time  
 
-###6. Normally Distributed Residuals
+## 6. Normally Distributed Residuals
 
 ```{r}
 ggplot(a_data, aes(x = .resid)) + 
