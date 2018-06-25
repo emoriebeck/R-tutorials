@@ -45,21 +45,27 @@ Once you've got the codebook, we should be ready to go.
 
 ```{r}
 # load your codebook 
+destfile <- "Codebook_EDB.xlsx"
+curl::curl_download(sprintf("%s/Codebook_EDB.xlsx?raw=true", wd), destfile)
+codebook <- readxl::read_excel(destfile)
 ```
 
 
 To start, let's trim out data frame. 
 ```{r}
 # create a vector of the old item names we need. 
+old_names <- tolower(codebook$Item)
+new_names <- codebook$new_name
 
 # use your preferred method to get rid of columns we don't need 
 # and rename them using our character vector of new names  
+dat.2005 <- dat.2005 %>% select(old_names) %>% setNames(new_names)
 ```
 
 ## Descriptives
 ```{r}
 # run the descriptives and check variable ranges
-
+describe(dat.2005)
 ```
 
 ## Check Missings 
@@ -67,19 +73,27 @@ How are missings coded in this data set? Do we need to make any changes to how t
 ```{r}
 # You should have noted some variables that needed "scrubbed" (changed to missing)
 # change those to NA using your preferred method
-
+dat.2005 <- dat.2005 %>% mutate_all(funs(mapvalues(., seq(-1,-7,-1), rep(NA,7), warn_missing = F)))
 ```
 
 ## Recode Variables  
 ```{r}
 # You should have your keys. Reverse code the items that need reverse coded. 
-
+keys     <- codebook$rev_code[codebook$rev_code == -1]
+items    <- codebook$new_name[codebook$rev_code == -1]
+dat.2005[,items] <- reverse.code(keys, dat.2005[,items], mini = 1, maxi = 7)
 ```
 
 ## Create composites
 For these data, we have lots of items, so we don't just want to create composites for the Big 5, we also want to create composites for the facets of each of the Big 5. Use the methods we learned before to do so.  
 ```{r}
-
+dat.2005 <- dat.2005 %>%
+  gather(key = item, value = value, BF_A1:BF_O3, na.rm = T) %>%
+  separate(item, c("trait", "item"), -1) %>%
+  group_by(trait, PROC_SID, PROC_household, Dem_DOB, Dem_Sex, Psych_OthWorr) %>%
+  summarize(value = mean(value, na.rm = T)) %>%
+  spread(key = trait, value = value) %>% 
+  ungroup()
 ```
 
 ## Create New Variables  
@@ -96,7 +110,7 @@ dat.2005 <- dat.2005 %>%
 Before we run a regression, we should always look at the zero-order correlations among the predictors and outcomes. For these data, we want to look at the relationship between age and personality, and gender, so correlate the age column with the composites for each of the Big 5 and their facets.  
 ```{r}
 # run the correlations
-
+cor(select(dat.2005, Dem_Sex:age), use = "pairwise")
 ```
 
 # Moderation  
@@ -119,35 +133,60 @@ where p is the number of predictors in the model.
 Now last time, I mentioned that we wouldn't get into the prediction question with multiple regression because it's more complicated. This is because we have to control for the covariates when making predictions. How we do that makes sense when we consider an alternative interpretation of any of the slope coefficients in multiple regression. "For someone with average levels of the covariates, a 1 unit increase in $X_i$ is associated with a $b_1$ increase in Y." Hopefully that makes it clear that what we have to do to find the predicted value $\hat{Y}$ at a given level on a predictor X, is to set all of the predictors/covariates to the average values. 
 
 ```{r}
-# Extraversion 
-fit.E1 <- lm(BF_A ~ age + Psych_OthWorr, data = dat.2005)
-summary(fit.E1)
+# shift data to long form, group by trait, and nest the data frame
+(nested.mods <- dat.2005 %>%
+  gather(key = trait, value = value, BF_A:BF_O, na.rm = T) %>%
+  group_by(trait) %>%
+  nest())
 
-# run the models for the rest of the Big 5 and interpret 
+# write a function for the model
+model_fun <- function(data){
+  lm(value ~ age + Psych_OthWorr, data = data)
+}
+
+# run the models 
+(nested.mods <- nested.mods %>%
+  mutate(model = map(data, model_fun)))
+
+# run the summaries
+(nested.mods <- nested.mods %>%
+  mutate(summary = map(model, summary)))
+
+nested.mods$summary
 ```
 
 
 Now, I'm going to introduce a useful new function to help us create the data frame we need to get the predicted values: `crossing()` from the `dplyr` package. Essentially, crossing is a function that "crosses" all the levels / values of the variables that you give it. It results in a data frame with rows that have all possible combinations of the columns. This is really great because otherwise you are stuck using `rep()` 8000 times.  
 
 ```{r}
-# create a frame of ranges of values 
 (pred.dat <- 
   crossing(
     age = seq(10, 80, 1),
     Psych_OthWorr = mean(dat.2005$Psych_OthWorr, na.rm = T)
   )) 
 
+# write prediction function 
+pred_fun <- function(model){
+  crossing(
+    age = seq(10, 80, 1),
+    Psych_OthWorr = mean(dat.2005$Psych_OthWorr, na.rm = T)
+  ) %>%
+    mutate(pred = predict(model, newdata = .))
+}
+
 # get the predicted values
-pred.E1 <- pred.dat %>% mutate(pred = predict(fit.E1, newdata = pred.dat))
+(nested.mods <- nested.mods %>%
+  mutate(pred = map(model, pred_fun)))
+
+# let's see what that gives us
+nested.mods %>% unnest(pred)
 
 # plot the results
-pred.E1 %>%
+nested.mods %>% unnest(pred) %>%
   ggplot(aes(x = age, value = pred, color = trait)) + 
   geom_line() +
   labs(x = "Age", y = "Predicted Extraversion Rating") +
   theme_classic()
-
-# do the same for the rest of the Big 5
 ```
 
 Moderation can be partially thought of as an extension of multiple regression, where we aren't just controlling for a variable as a covariate, we're saying that the relationship between the predictor X and the outcome Y varies at different levels of the covariate. Consider, for example, depression and positive events' relationship to global happiness ratings. If you think about it, you wouldn't expect positive events to affect the happiness of people with different levels of depression the same. There's a reason that one type of depression is called anhedonia -- positive events stop arousing positive emotions.  
@@ -186,11 +225,16 @@ When we're controlling for a nominal variable, this isn't a huge deal. We're not
 Anyway, we're now set to run the model. We'll return back to our dummy codes when we start to interpret our coefficients.  
 
 ```{r}
-fit.E2 <- lm(BF_E ~ age + gender + age:gender, data = dat.2005)
-summary(fit.E2)
+# write a new function for the interaction model
+model_fun <- function(data){
+  lm(value ~ age + gender + age:gender, data = data)
+}
 
-# run the models for the rest of the Big 5
+(nested.mods <- nested.mods %>%
+  mutate(cat.int.model = map(data, model_fun),
+         summary = map(cat.int.model, summary)))
 
+# run the model below and save it to an object.  
 ```
 
 Does gender moderate the relationship between age and personality?  
@@ -242,22 +286,37 @@ The $b_2$ coefficient is the mean difference in personality at age = 0. Thus, th
 
 The good news is that this is relatively easy to do in R:
 ```{r}
-# make the model frame
-pred.dat <- crossing(
+pred_fun <- function(model){
+  crossing(
     age = seq(10,80,1), 
     gender = c("Male", "Female")
-  )
+  ) %>%
+    mutate(pred = predict(model, newdata = .))
+}
 
-# get the predicted values
-pred.E2 <- pred.dat %>% mutate(pred = predict(fit.E2, newdata = .))
+# let's get the predictions
+(nested.mods <- nested.mods %>%
+  mutate(int.pred = map(cat.int.model, pred_fun)))
+
+# let's take a look
+nested.mods %>% unnest(cat.int.pred)
 
 # plot the results
-pred.E2 %>%
+nested.mods %>% unnest(cat.int.pred) %>%
+  ggplot(aes(x = age, y = pred, color = gender)) +
+  geom_line() +
+  facet_wrap(~trait, nrow = 2) +
+  theme_classic()
+
+# remember the crossing function I introduced earlier? Well, it's baaaackk
+(out <- crossing(age = seq(10,80,1),
+         gender = c("Male", "Female")))
+
+out %>% 
+  mutate(pred = predict(fit.E, newdata = .)) %>%
   ggplot(aes(x = age, y = pred, color = gender)) +
   geom_line() +
   theme_classic()
-
-# repeat for the rest of the Big 5
 ```
 
 ## Centering Predictors  
@@ -288,7 +347,7 @@ However, we have a problem. Neither of our variables have a natural 0 point. Sin
 
 ```{r}
 dat.2005 <- dat.2005 %>% 
-  mutate(GMC_Psych_OthWorr = Psych_OthWorr - mean(Psych_OthWorr, na.rm = T))
+  mutate(GMC_Psych_OthWorr  = Psych_OthWorr - mean(Psych_OthWorr, na.rm = T))
 ```
 
 We're now set to run the model: 
@@ -296,11 +355,13 @@ We're now set to run the model:
 ```{r}
 # run the model below and save it to an object. 
 # write a new function for the interaction model
-fit.E3 <- lm(BF_E ~ age + GMC_Psych_OthWorr + age:GMC_Psych_OthWorr, data = dat.2005)
-summary(fit.E3)
+model_fun <- function(data){
+  lm(value ~ age + GMC_Psych_OthWorr + age:GMC_Psych_OthWorr, data = data)
+}
 
-# repeat for the rest of the Big 5 and interpret
-
+(nested.mods <- nested.mods %>%
+  mutate(con.int.model = map(data, model_fun),
+         summary = map(con.int.model, summary)))
 ```
 
 Does worry moderate the relationship between age and personality?  
@@ -327,23 +388,29 @@ Hopefully, this will make more sense once we've plotted the interaction.
 
 To do this, we'll use a very similar procedure as we used previously, but this time we need to calculate the mean and SD of the variable we want to treat as the moderator 
 ```{r}
-# find the mean and SD of the moderator
 m.psy.ow  <- mean(dat.2005$GMC_Psych_OthWorr, na.rm = T)
 sd.psy.ow <-   sd(dat.2005$GMC_Psych_OthWorr, na.rm = T)
 
-# get the model frame
-pred.dat <- crossing(
-  age = seq(10,80,1),
-  GMC_Pscyh_OthWorr = c(m.psy.ow - sd.psy.ow, m.psy.ow, m.psy.ow + sd.psy.ow)
-)
+pred_fun <- function(model){
+  crossing(
+    age = seq(10,80,1),
+    GMC_Pscyh_OthWorr = c(m.psy.ow - sd.psy.ow, m.psy.ow, m.psy.ow + sd.psy.ow)
+  ) %>%
+    mutate(pred = predict(model, newdata = .))
+}
 
-# get the predicted values
-pred.E3 <- pred.dat %>% mutate(pred = predict(fit.E3, newdata = .))
+# let's get the predictions
+(nested.mods <- nested.mods %>%
+  mutate(int.pred = map(con.int.model, pred_fun)))
+
+# let's take a look
+nested.mods %>% unnest(con.int.pred)
 
 # plot the results
-pred.E3 %>%
+nested.mods %>% unnest(con.int.pred) %>%
   ggplot(aes(x = age, y = pred, color = gender)) +
   geom_line() +
+  facet_wrap(~trait, nrow = 2) +
   theme_classic()
 ```
 
