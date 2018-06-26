@@ -31,7 +31,7 @@ library(tidyverse)
 ```
 
 ## Data  
-This week, our data are going to come from the German Socioeconomic Panel Study (GSOEP). The GSOEP is a longitudinal study of adults in German housesholds. The study has a broad range of variables, but for our purposes we're just going to use personality ratings, age, self-rated health, and gender from a single year (2005). In future weeks, we'll work to get additional variables across waves, which will be more involved, but this will get our feet wet with these data. 
+This week, our data are going to come from the German Socioeconomic Panel Study (GSOEP). The GSOEP is a longitudinal study of adults in German housesholds. The study has a broad range of variables, but for our purposes we're just going to use personality ratings, age, life satisfaction, and gender from a single year (2005). In future weeks, we'll work to get additional variables across waves, which will be more involved, but this will get our feet wet with these data. 
 
 Like when we used the PAIRS data, we need a codebook. To create it, go to https://data.soep.de/soep-core# and use the search feature to find the variables you need or https://data.soep.de/soep-long/topics/ where you can scroll through topics (this may be easier for finding the personality variables). I've included a base codebook that should show you what you need to gather for each variable.  
 ```{r}
@@ -90,7 +90,7 @@ For these data, we have lots of items, so we don't just want to create composite
 dat.2005 <- dat.2005 %>%
   gather(key = item, value = value, BF_A1:BF_O3, na.rm = T) %>%
   separate(item, c("trait", "item"), -1) %>%
-  group_by(trait, PROC_SID, PROC_household, Dem_DOB, Dem_Sex, Psych_OthWorr) %>%
+  group_by(trait, PROC_SID, PROC_household, Dem_DOB, Dem_Sex, Psych_LifeSat) %>%
   summarize(value = mean(value, na.rm = T)) %>%
   spread(key = trait, value = value) %>% 
   ungroup()
@@ -141,7 +141,7 @@ Now last time, I mentioned that we wouldn't get into the prediction question wit
 
 # write a function for the model
 model_fun <- function(data){
-  lm(value ~ age + Psych_OthWorr, data = data)
+  lm(value ~ age + Psych_LifeSat, data = data)
 }
 
 # run the models 
@@ -162,14 +162,14 @@ Now, I'm going to introduce a useful new function to help us create the data fra
 (pred.dat <- 
   crossing(
     age = seq(10, 80, 1),
-    Psych_OthWorr = mean(dat.2005$Psych_OthWorr, na.rm = T)
+    Psych_LifeSat = mean(dat.2005$Psych_LifeSat, na.rm = T)
   )) 
 
 # write prediction function 
 pred_fun <- function(model){
   crossing(
     age = seq(10, 80, 1),
-    Psych_OthWorr = mean(dat.2005$Psych_OthWorr, na.rm = T)
+    Psych_LifeSat = mean(dat.2005$Psych_LifeSat, na.rm = T)
   ) %>%
     mutate(pred = predict(model, newdata = .))
 }
@@ -340,14 +340,14 @@ $$\hat{Y}_{ij} = b_0 + b_1*age + b_2*personality + b_3*(age*personality)$$
 
 The same principles as before apply -- the $b_3$ coefficient is a product variable that we would create as follows:  
 ```{r}
-dat.2005 %>% select(age, Psych_OthWorr) %>% mutate(`age:PsychOthWorr` = age * Psych_OthWorr)
+dat.2005 %>% select(age, Psych_LifeSat) %>% mutate(`age:Psych_LifeSat` = age * Psych_LifeSat)
 ```
 
-However, we have a problem. Neither of our variables have a natural 0 point. Since we're testing whether worries influence the relationship between age and personality, that's our moderator. In other words, worries is the variable that needs a natural 0 point. We only have one observation from each person, so person mean centering doesn't make sense. We also don't have a variable that it makes sense to center the value at, so we're going to grand mean center. 
+However, we have a problem. Neither of our variables have a natural 0 point. Since we're testing whether life satisfaction influences the relationship between age and personality, that's our moderator. In other words, life satisfaction is the variable that needs a natural 0 point. We only have one observation from each person, so person mean centering doesn't make sense. We also don't have a variable that it makes sense to center the value at, so we're going to grand mean center. 
 
 ```{r}
 dat.2005 <- dat.2005 %>% 
-  mutate(GMC_Psych_OthWorr  = Psych_OthWorr - mean(Psych_OthWorr, na.rm = T))
+  mutate(GMC_Psych_LifeSat  = Psych_LifeSat - mean(Psych_LifeSat, na.rm = T))
 ```
 
 We're now set to run the model: 
@@ -356,7 +356,7 @@ We're now set to run the model:
 # run the model below and save it to an object. 
 # write a new function for the interaction model
 model_fun <- function(data){
-  lm(value ~ age + GMC_Psych_OthWorr + age:GMC_Psych_OthWorr, data = data)
+  lm(value ~ age + GMC_Psych_LifeSat + age:GMC_Psych_LifeSat, data = data)
 }
 
 (nested.mods <- nested.mods %>%
@@ -364,11 +364,11 @@ model_fun <- function(data){
          summary = map(con.int.model, summary)))
 ```
 
-Does worry moderate the relationship between age and personality?  
+Does life satisfaction moderate the relationship between age and personality?  
 
 How would you interpret the age (main effect) coefficient?  
 
-How would you interpret the worry (main effect) coefficient (hint: refer back to grand mean cetnering)?  
+How would you interpret the life satisfaction (main effect) coefficient (hint: refer back to grand mean cetnering)?  
 
 How would you interpret the interaction coefficient (hint: refer back to how we interpreted the nominal variable as well as grand mean centering)?  
 
@@ -388,13 +388,13 @@ Hopefully, this will make more sense once we've plotted the interaction.
 
 To do this, we'll use a very similar procedure as we used previously, but this time we need to calculate the mean and SD of the variable we want to treat as the moderator 
 ```{r}
-m.psy.ow  <- mean(dat.2005$GMC_Psych_OthWorr, na.rm = T)
-sd.psy.ow <-   sd(dat.2005$GMC_Psych_OthWorr, na.rm = T)
+m.psy.ls  <- mean(dat.2005$GMC_Psych_LifeSat, na.rm = T)
+sd.psy.ls <-   sd(dat.2005$GMC_Psych_LifeSat, na.rm = T)
 
 pred_fun <- function(model){
   crossing(
     age = seq(10,80,1),
-    GMC_Pscyh_OthWorr = c(m.psy.ow - sd.psy.ow, m.psy.ow, m.psy.ow + sd.psy.ow)
+    GMC_Pscyh_LifeSat = c(m.psy.ls - sd.psy.ls, m.psy.ls, m.psy.ls + sd.psy.ls)
   ) %>%
     mutate(pred = predict(model, newdata = .))
 }
