@@ -1,5 +1,5 @@
 ---
-title: "Logistic Regression"
+title: "Intro to Longitudinal Models, Part I"
 author: 
   - "Emorie D Beck"
 date: "`r Sys.setlocale('LC_TIME', 'C'); format(Sys.time(), '%d\\\\. %B %Y')`"
