@@ -1,0 +1,343 @@
+---
+title: "Logistic Regression"
+author: 
+  - "Emorie D Beck"
+date: "`r Sys.setlocale('LC_TIME', 'C'); format(Sys.time(), '%d\\\\. %B %Y')`"
+output:
+  html_document:
+    theme: united
+    highlight: tango
+    df_print: paged
+    code_folding: show
+    toc: true
+    toc_float: true
+    toc_depth: 2
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Workspace 
+
+## Packages
+```{r}
+library(psych)
+library(broom)
+library(plyr)
+library(tidyverse)
+```
+
+## Data  
+This week, our data are going to (continue to) come from the German Socioeconomic Panel Study (GSOEP). The GSOEP is a longitudinal study of adults in German housesholds. The study has a broad range of variables, but for our purposes we're just going to use personality ratings, age, and gender from 2005 to 2015.  
+
+We need to *reduce* our codebook. Use your codebook from last week, and add new column distinguishing personality items from life event items. We don't need life events this week, so we won't work with those.     
+
+Each year has several different files. Thankfully, for our purposes, we just need one file for each year. The first part of that file name indexes which wave it is. Waves are labeled a (1985) to bf (2015). Once the waves hit z, they start over at "ba". The second piece of the filename indexes which type of file it is. We need the "p" files, which stand for person. So, for instance, 2005 is "vp.sav".  
+
+There are different ways to load it in, but I would recommend using some form of loop, which should do the following:  
+1. read in the file for a specific year (e.g. using `haven::read_sav()`). 
+2. pull the variables from the codebook from that year (e.g. using `select()`).
+    - NOTE: you should pull certain variables, like the person and household IDs for every year.  
+3. rename those variables in wide format.  
+4. add a column to the data for that year that indexes what year the observation is.  
+5. merge the data from that year with previous years.  
+
+For help with this, see https://emoriebeck.github.io/R-tutorials/purrr/. I'll give you a `purrr` solution later in the week.    
+
+Once you've got the codebook, we should be ready to go. 
+
+```{r}
+wd <- "https://github.com/emoriebeck/R-tutorials/blob/master/RA_Files/Week_5_Logistic_Regression"
+# load your codebook 
+destfile <- "Codebook_EDB.xlsx"
+curl::curl_download(sprintf("%s/Codebook_EDB.xlsx?raw=true", wd), destfile)
+codebook <- readxl::read_excel(destfile) %>%
+  mutate(Item = stringr::str_to_lower(Item)) %>%
+  filter(class != "group")
+```
+
+```{r}
+all.old.cols <- (codebook %>% filter(class == "proc" & Year == 0))$Item
+all.new.cols <- (codebook %>% filter(class == "proc" & Year == "0"))$new_name
+
+# create short function to read in separate files for each wave
+read_fun <- function(file, year){
+  print(year)
+  old.names <- (codebook %>% filter(Year == year & class %in% c("group", "predictor", "proc")))$Item
+  new.names <- (codebook %>% filter(Year == year & class %in% c("group", "predictor", "proc")))$new_name
+  z <- haven::read_sav(url(sprintf("%s/data/%sp.sav?raw=true", wd, file))) %>%
+    select(one_of(all.old.cols), one_of(old.names)) %>%
+    setNames(c(all.new.cols, new.names)) 
+}
+
+# you need letters, not numbers to index different data files. 
+# but years will be more useful to index your codebook, so we'll 
+# put both in our starting data frame. I've filled out this part. 
+# Now you just need to figure out how use that to load the files 
+# and get the correct variables (one's that repeat year to year)
+dat <- tibble(
+  Year = as.character(seq(2005, 2015,1)),
+  file = c(letters[22:26], paste("b", letters[1:6], sep = ""))) %>%
+  mutate(data = map2(file, Year, read_fun)) %>%
+  unnest(data)
+```
+
+## Descriptives  
+Because our data are now longitudinal, we need to split our descriptives by year. Try doing this using the `describeBy()` in the `psych` package.  
+```{r}
+# run the descriptives and check variable ranges
+describeBy(dat, dat$Year)
+```
+
+## Check Missings 
+How are missings coded in this data set? Do we need to make any changes to how they are coded?  
+```{r}
+# You should have noted some variables that needed "scrubbed" (changed to missing)
+# change those to NA using your preferred method
+dat <- dat %>% mutate_all(funs(mapvalues(., seq(-1,-7,-1), rep(NA,7), warn_missing = F)))
+```
+
+## Recode Variables  
+```{r}
+# You should have your keys. Reverse code the items that need reverse coded. 
+keys     <- codebook$rev_code[codebook$rev_code == -1]
+items    <- codebook$new_name[codebook$rev_code == -1]
+dat[,items] <- reverse.code(keys, dat[,items], mini = 1, maxi = 7)
+
+# I'm going to give you this chunk because apparently some people don't know what year they were born
+dat <- dat %>% 
+  group_by(PROC_SID) %>% 
+  mutate(
+    Dem_DOB = max(Dem_DOB, na.rm = T),
+    Dem_DOB = ifelse(is.infinite(Dem_DOB) == T, NA, Dem_DOB),
+    Dem_Sex = max(Dem_Sex, na.rm = T),
+    Dem_Sex = ifelse(is.infinite(Dem_Sex) == T, NA, Dem_Sex)
+  )
+```
+
+## Create New Variables  
+For these data, we need to create an age variable. There isn't one in the data set.v
+```{r}
+# create an age variable by subtracting the date of birth from 2005 
+# change gender to a factor 
+dat <- dat %>% 
+  mutate(age = 2005 - Dem_DOB,
+         gender = factor(Dem_Sex, levels = c(1,2), labels = c("Male", "Female")))
+```
+
+## Create composites
+For these data, we have lots of items, so we don't just want to create composites for the Big 5, we also want to create composites for the facets of each of the Big 5. Use the methods we learned before to do so.  
+
+### Personality  
+```{r}
+pers_dat <- dat %>%
+  gather(key = item, value = value, BF_A1:BF_O3, na.rm = T) %>%
+  separate(item, c("trait", "item"), -1) %>%
+  group_by(trait, PROC_SID, PROC_household, Year, Dem_DOB, age, Dem_Sex, gender) %>%
+  summarize(value = mean(value, na.rm = T)) %>%
+  spread(key = trait, value = value) %>% 
+  ungroup() %>%
+  mutate(wave = as.numeric(mapvalues(Year, c(2005, 2009, 2013), 0:2)))
+```
+
+Unfortunately, to run our models below, we're going to have to get rid of people who don't have more than 1 wave of data, so we'll do that below before we move on.  
+```{r}
+pers_dat <- pers_dat %>%
+  group_by(PROC_SID) %>%
+  mutate(n = n()) %>%
+  filter(n > 1) %>%
+  ungroup()
+```
+
+
+# Longitudinal Models  
+When we talk about longitudinal models, we can be talking about a bunch of things. Longitdudinal models are really just a superordinate category for several families of models meant for dealing with a problem that is not unique to longitudinal data -- non-independence. Realistically, you've encountered and worked with this before, even if you've only taken introductory statistics. If you've ever run a paired-samples t-test or a repeated measures ANOVA / MANOVA, then you've worked with data with non-independence. 
+
+In the simplest case, you may be conducting a paired samples t-test of something like depression scores, where you have two measurements from each person -- one pre-treatment and one post-treatment. You can't run an independent samples t-test here because what you're really testing is whether depression scores differed pre and post-treatment. But the difference isn't just averages across the two samples. It is possible to show no mean-level changes in depression even if individuals show changes across the two measures. That's why, with a paired samples t-test, we're actually testing if the average difference between each person's pre- and post-treatment scores differ from 0 (no change). This is basically because each person is not independent of (i.e. is dependent on) him- or herself. But by looking at the difference, we're accounting for differences at baseline and looking at average change.
+
+With longitudinal modeling, we are really just extending this case to more waves and also introducing new methods for examining change in more robust and nuanced ways.
+
+## Hierarchical / Multilevel Models  
+The framework we are going to use to discuss longitudinal models is called hierarchical or multilevel modeling (also sometimes called mixed effects models). We're going to focus on a specific instance of these models called multilevel growth models because there is a specific somewhat stepwise procedure used when the non-independence in the data is due to time.
+
+The idea with MLM/HLM is that we can deal with this non-independence by nesting. With time, we can nest, observations within person, but a classic example of HLM/MLM, is students nested within classrooms and/or classrooms nested within schools. The idea is that we can then look at between group effects and within group effects. With longitudinal data, this means between person and within-person effects. Or group level differences and individual level differences. 
+
+Basically, we're going to take our equation for simple linear regression and extend it. We're going to use the personality data from the GSOEP to see if there are time associated changes (kind of like when we used age as a predictor of personality a few weeks ago). The model for this would be as follows:  
+
+$$Y_{it} = b_0 + b_1*time_t + \epsilon_{it}$$  
+
+Note that we now a subscript "t" for time.  
+
+We can run this with our data.  
+
+```{r, results = 'asis'}
+nested.mods <- pers_dat %>% 
+  gather(key = trait, value = value, BF_A:BF_O, na.rm = T) %>%
+  mutate(trait = str_remove(trait, "BF_")) %>%
+  group_by(trait) %>%
+  nest() %>%
+  mutate(model = map(data, ~lm(value ~ wave, data = .)),
+         tidy = map(model, broom::tidy))
+
+nested.mods %>% unnest(tidy) %>%
+  filter(term == "wave") %>% 
+  mutate_at(vars(estimate:p.value), 
+    funs(ifelse(p.value < .05, sprintf("<strong>%.2f</strong>", .), sprintf("%.2f",.)))) %>%
+  knitr::kable(., "html", booktabs = T, escape = F) %>%
+  kableExtra::kable_styling(full_width = F)
+```
+
+Here we see that on average, personality seems to increase across waves, with the exception of Neuroticism, which decreases. But the problem here is of non-independence. I could demonstrate this but the idea is that each person's personality scores over time are going to be more associated with their own than with others. In some cases, this won't be a huge deal and the results won't change much when we account for this, but in others it might. 
+
+## Random Effects  
+How do we account for non-independence? We can treat persons as "random effects." There's a more technical definition that I won't go into here, but the basic idea is that we can more or less let each person be modeled individually (both intercept and slope) and then join all those individual models back together. This is what we meant when we talked about interindividual differences intraindividual change before. Remember, that looks like this: 
+
+```{r}
+pers_dat %>%
+  filter(PROC_SID %in% sample(unique(pers_dat$PROC_SID), 100)) %>%
+  ggplot(aes(x = wave, y = BF_E)) + 
+    geom_smooth(aes(color = factor(PROC_SID), group = PROC_SID), method = "lm", se = F) + 
+    theme_classic() +
+    theme(legend.position = "none")
+```
+
+Clearly, people differ both in baseline personality, as well as change in personality. These are our **random effects**, and the variability suggests that we want to model these. 
+
+We're still primarily interested in the **fixed effects** which are the group level / between person effects (average personality and average change in personality), but we also want to account for the dependencies in our data by modeling the **random effects**. In other words, we want to model the group and the individuals.  
+
+To this, we'll talk about different *levels* of equations, which will refer to different levels of effects. 
+
+The most basic, and the one we've worked with thus far, is the **Level 1** equation: 
+
+$$Y_{ij} = \beta_{0j} + \epsilon_{ij}$$  
+Note two key changes to this equation: 
+1. We know use the notation $\beta$ for the model coefficient, rather than $b$.  
+2. We have a new subscript, $\beta_{0j}$, rather than $b_0$. This accounts for different estimates of the intercept for different people (individual differences in baseline personality.)  
+
+Note that here, we are not yet accounting for time, so the model is really just modeling whether there are individual differences in personality. But the model above doesn't explicitly show those. That's where a **Level 2** equation comes in:  
+
+$$\beta_{0j} = \gamma_{00} + r_{0j}$$  
+
+What does this mean? $\beta_{0j}$ comes from our Level 1 equation above, where j is the subscript for each person, but now we're breaking it down into two pieces: 
+1. $\gamma_{00}$ is the fixed term, in this case average personality across the sample. 
+2. $r_{0j}$ is the random effect, or the difference between the fixed effect term and the actual estimate for a given person. So for example, if $r_{01} = .25$ and $\gamma_{00} = 3$, the estimate $\beta_{01}$ (personality for person 1) would be 3.25.  
+
+## The Unconditional Model  
+
+In MLM growth models, we always start with what we call an unconditional model, which basically means that we we have only a fixed effect intercept and a random effect intercept. The goal in starting with this is to see if there are individual differences to begin with.  
+
+The unconditional model is the one discussed above:  
+(Note that we are now using $\hat{Y}$, which subsumes error ($\epsilon_{ij}$) into the model)  
+
+Level 1: $\hat{Y}_{ij} = \beta_{0j}$  
+Level 2: $\beta_{0j} = \gamma_{00} + r_{0j}$  
+
+The question here is basically whether we need the term $r_{0j}$ -- that is, are there indivdual differences / dependencies  
+
+Before we talk about what that means, let's run the models. To do so, we'll use a package called `lme4`, which is great package with intuitive syntax for running MLM/HLM in `R`. Just like with the `lm()` function, the formulas are in the form `y ~ x`. The one addition we need is something to tell `lme4` what our grouping/nesting variable is and what random effects to include. We do this by adding an additional term on the right hand side (RHS) of the equation:  `y ~ x + (1 | grouping)`. The parentheses indicate that we are talking about random effects. The left side of the term in parentheses tells us what random effects to include, while the right hand side tells us what the grouping variable is. A 1 on the LHS means that we want a random intercept (0 would be no intercept). 
+
+```{r, eval = F}
+install.packages("lme4")
+```
+
+
+Thus, the corresponding model in our case would be `value ~ 1 + (1 | PROC_SID)`. Both 1's signal intercepts, with the one outside the parentheses being fixed effect intercept while the one within the parentheses is the random effect intercept. 
+
+```{r}
+library(lme4)
+nested.mods <- nested.mods %>%
+  mutate(uc.model = map(data, ~lmer(value ~ 1 + (1 | PROC_SID), data = .)),
+         uc.tidy = map(uc.model, broom::tidy))
+```
+
+### Intra-Class Correlations  
+How do we index this? With a measure called **Intraclass correlation** (ICC). 
+
+The beauty of MLM is that it allows us to break variance in our data into different components. One piece is unexplained variance (level 1 variance, or the residuals). The second piece is person level variance (level 2 variance). In a normal model, this would fall under level 1, so we wouldn't be able to separate noise (model error) from person level variance (:( ). A good MLM is one where we have a lot of level 2 / person-level variance. 
+
+What this means is relative to the total Level 1 and Level 2 variance in the data, how much of it is at level 2, which is captured in the following equation:  
+
+$$ICC = \frac{\tau_{00}^2}{\tau_{00}^2 + \sigma^2}$$  
+How do we get the ICC of the model? We could manually calculate the ICC, which is a good leanring exercise, but we can also use the `ICC()` function in the `reghelper` package.  
+
+```{r, eval = F}
+install.packages("reghelper")
+```
+
+```{r}
+library(reghelper)
+
+(nested.mods <- nested.mods %>% 
+    mutate(ICC = map_dbl(uc.model, ICC)))
+
+# A: 29% of the variance is between people, while the rest is due to within-person variance and random noise
+# C: xx% of the variance is between people, while the rest is due to within-person variance and random noise
+# E: xx% of the variance is between people, while the rest is due to within-person variance and random noise
+# N: xx% of the variance is between people, while the rest is due to within-person variance and random noise
+# O: xx% of the variance is between people, while the rest is due to within-person variance and random noise
+```
+
+
+## Adding time  
+So there seems to be substantial individual differences (between person / level 2 variance). So we want to keep the random intercept and can now move on to the question of time / change. We'll start by adding a fixed effect of time and work toward adding a random effect. We do it in this order so that we can do model comparisons to tell us whether adding the additional parameters is warranted. 
+
+Thus, the form for our equation is now: 
+
+**Level 1**: $\hat{Y}_{ij} = \beta_{0j} + \beta_{1j}*time_{ij}$  
+We now have 2 Level 2 equations: 
+
+**Level 2:**  
+$\beta{0j} = \gamma_{00} + r_{0j}$ -- fixed effect intercept + random intercept  
+$\beta{1j} = \gamma_{10}$ -- fixed effect slope + **NO** random slope  
+
+In `lme4` terms, this is `value ~ 1 + wave + (1|PROC_SID)`, where the only additional term is the fixed effects term, "wave".  
+
+```{r}
+nested.mods <- nested.mods %>%
+  mutate(l.model1 = map(data, ~lmer(value ~ 1 + wave + (1 | PROC_SID), data = .)),
+         l.tidy1 = map(l.model1, broom::tidy))
+```
+
+Let's look at the slopes and intercepts of these models  
+```{r}
+nested.mods %>% unnest(l.tidy1) %>% filter(term == "wave")
+```
+
+## Random Slopes and Intercepts  
+Do we need a random slope? The easiest way to answer this question is by doing a model comparison, but first, we need to add the random slope to the model. 
+
+The Level 1 and 2 equations are:  
+**Level 1**: $\hat{Y}_{ij} = \beta_{0j} + \beta_{1j}*time_{ij}$  
+We now have 2 Level 2 equations: 
+
+**Level 2:**  
+$\beta{0j} = \gamma_{00} + r_{0j}$ -- fixed effect intercept + random intercept  
+$\beta{1j} = \gamma_{10} + r_{1j}$ -- fixed effect slope + random slope  
+
+In `lme4`, the form of the model is `value ~ 1 + wave + (1 + wave | PROC_SID)`, which signals that we have fixed and random intercepts AND slopes. 
+
+```{r}
+nested.mods <- nested.mods %>%
+  mutate(l.model2 = map(data, ~lmer(value ~ 1 + wave + (1 + wave | PROC_SID), data = .)),
+         l.tidy2 = map(l.model2, broom::tidy))
+```
+
+Let's look at the slopes and intercepts of these models  
+```{r}
+nested.mods %>% unnest(l.tidy2) %>% filter(term == "wave")
+```
+
+We do see that our fixed effect estimates did change a little. But did adding the random slopes really add anything?  
+```{r}
+nested.mods <- nested.mods %>%
+  mutate(compare = map2(l.model1, l.model2, anova))
+
+nested.mods$compare
+```
+
+Looks like random slopes added to all the models but Extraversion, indicating that there were significant interindividual differences in intraindividual personality change for A, C, N, and O.  
+
+## Level 2 Variances -- Individual Differences  
