@@ -340,4 +340,10 @@ nested.mods$compare
 
 Looks like random slopes added to all the models but Extraversion, indicating that there were significant interindividual differences in intraindividual personality change for A, C, N, and O.  
 
+
+To do: plots of (1) no random effects (2) random int only (random int + slope)  
+Description of level 2 variance and why it matters  
+predicted values / plots
+tables
+
 ## Level 2 Variances -- Individual Differences  
