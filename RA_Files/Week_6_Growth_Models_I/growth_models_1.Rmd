@@ -17,7 +17,7 @@ editor_options:
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
 ```
 
 # Workspace 
@@ -26,6 +26,8 @@ knitr::opts_chunk$set(echo = TRUE)
 ```{r}
 library(psych)
 library(broom)
+library(knitr)
+library(kableExtra)
 library(plyr)
 library(tidyverse)
 ```
@@ -50,10 +52,12 @@ For help with this, see https://emoriebeck.github.io/R-tutorials/purrr/. I'll gi
 Once you've got the codebook, we should be ready to go. 
 
 ```{r}
-wd <- "https://github.com/emoriebeck/R-tutorials/blob/master/RA_Files/Week_5_Logistic_Regression"
+# wd <- "https://github.com/emoriebeck/R-tutorials/blob/master/RA_Files/Week_5_Logistic_Regression"
+wd <- "~/Documents/Github/R-tutorials/RA_Files/Week_5_Logistic_Regression"
 # load your codebook 
-destfile <- "Codebook_EDB.xlsx"
-curl::curl_download(sprintf("%s/Codebook_EDB.xlsx?raw=true", wd), destfile)
+# destfile <- "Codebook_EDB.xlsx"
+# curl::curl_download(sprintf("%s/Codebook_EDB.xlsx?raw=true", wd), destfile)
+destfile <- sprintf("%s/Codebook_EDB.xlsx", wd)
 codebook <- readxl::read_excel(destfile) %>%
   mutate(Item = stringr::str_to_lower(Item)) %>%
   filter(class != "group")
@@ -68,7 +72,9 @@ read_fun <- function(file, year){
   print(year)
   old.names <- (codebook %>% filter(Year == year & class %in% c("group", "predictor", "proc")))$Item
   new.names <- (codebook %>% filter(Year == year & class %in% c("group", "predictor", "proc")))$new_name
-  z <- haven::read_sav(url(sprintf("%s/data/%sp.sav?raw=true", wd, file))) %>%
+  # l.file <- url(sprintf("%s/data/%sp.sav?raw=true", wd, file))
+  l.file <- sprintf("%s/data/%sp.sav", wd, file)
+  z <- haven::read_sav(l.file) %>%
     select(one_of(all.old.cols), one_of(old.names)) %>%
     setNames(c(all.new.cols, new.names)) 
 }
@@ -154,14 +160,14 @@ pers_dat <- pers_dat %>%
 
 
 # Longitudinal Models  
-When we talk about longitudinal models, we can be talking about a bunch of things. Longitdudinal models are really just a superordinate category for several families of models meant for dealing with a problem that is not unique to longitudinal data -- non-independence. Realistically, you've encountered and worked with this before, even if you've only taken introductory statistics. If you've ever run a paired-samples t-test or a repeated measures ANOVA / MANOVA, then you've worked with data with non-independence. 
+When we talk about longitudinal models, we can be talking about a bunch of things. Longitdudinal models are really just a superordinate category for several families of models meant for dealing with a problem that is not unique to longitudinal data -- <font color="blue"><strong>non-independence</strong></font>. Realistically, you've encountered and worked with this before, even if you've only taken introductory statistics. If you've ever run a paired-samples t-test or a repeated measures ANOVA / MANOVA, then you've worked with data with non-independence. 
 
 In the simplest case, you may be conducting a paired samples t-test of something like depression scores, where you have two measurements from each person -- one pre-treatment and one post-treatment. You can't run an independent samples t-test here because what you're really testing is whether depression scores differed pre and post-treatment. But the difference isn't just averages across the two samples. It is possible to show no mean-level changes in depression even if individuals show changes across the two measures. That's why, with a paired samples t-test, we're actually testing if the average difference between each person's pre- and post-treatment scores differ from 0 (no change). This is basically because each person is not independent of (i.e. is dependent on) him- or herself. But by looking at the difference, we're accounting for differences at baseline and looking at average change.
 
 With longitudinal modeling, we are really just extending this case to more waves and also introducing new methods for examining change in more robust and nuanced ways.
 
 ## Hierarchical / Multilevel Models  
-The framework we are going to use to discuss longitudinal models is called hierarchical or multilevel modeling (also sometimes called mixed effects models). We're going to focus on a specific instance of these models called multilevel growth models because there is a specific somewhat stepwise procedure used when the non-independence in the data is due to time.
+The framework we are going to use to discuss longitudinal models is called <font color = "blue"><strong>hierarchical or multilevel modeling</strong></font> (also sometimes called mixed effects models). We're going to focus on a specific instance of these models called <font color="blue"><strong>multilevel growth models</strong></font> because there is a specific somewhat stepwise procedure used when the non-independence in the data is due to time.
 
 The idea with MLM/HLM is that we can deal with this non-independence by nesting. With time, we can nest, observations within person, but a classic example of HLM/MLM, is students nested within classrooms and/or classrooms nested within schools. The idea is that we can then look at between group effects and within group effects. With longitudinal data, this means between person and within-person effects. Or group level differences and individual level differences. 
 
@@ -175,17 +181,27 @@ We can run this with our data.
 
 ```{r, results = 'asis'}
 nested.mods <- pers_dat %>% 
+  # move traits to long format for nesting
   gather(key = trait, value = value, BF_A:BF_O, na.rm = T) %>%
+  # get rid of inventory tag "BF_" from traits
   mutate(trait = str_remove(trait, "BF_")) %>%
+  # group by trait
   group_by(trait) %>%
+  # nest the data frame
   nest() %>%
+  # run the model and extract the tidy summary
   mutate(model = map(data, ~lm(value ~ wave, data = .)),
          tidy = map(model, broom::tidy))
 
-nested.mods %>% unnest(tidy) %>%
+nested.mods %>% 
+  # unnest the tidy summary
+  unnest(tidy) %>%
+  # filter out the slope: "wave"
   filter(term == "wave") %>% 
+  # format all the model terms to bold if "significant" & round to 2 decimal places
   mutate_at(vars(estimate:p.value), 
     funs(ifelse(p.value < .05, sprintf("<strong>%.2f</strong>", .), sprintf("%.2f",.)))) %>%
+  # use kable to make an html table
   knitr::kable(., "html", booktabs = T, escape = F) %>%
   kableExtra::kable_styling(full_width = F)
 ```
@@ -193,7 +209,7 @@ nested.mods %>% unnest(tidy) %>%
 Here we see that on average, personality seems to increase across waves, with the exception of Neuroticism, which decreases. But the problem here is of non-independence. I could demonstrate this but the idea is that each person's personality scores over time are going to be more associated with their own than with others. In some cases, this won't be a huge deal and the results won't change much when we account for this, but in others it might. 
 
 ## Random Effects  
-How do we account for non-independence? We can treat persons as "random effects." There's a more technical definition that I won't go into here, but the basic idea is that we can more or less let each person be modeled individually (both intercept and slope) and then join all those individual models back together. This is what we meant when we talked about interindividual differences intraindividual change before. Remember, that looks like this: 
+How do we account for non-independence? We can treat persons as <font color = "blue"><strong>"random effects."</strong></font> There's a more technical definition that I won't go into here, but the basic idea is that we can more or less let each person be modeled individually (both intercept and slope) and then join all those individual models back together. This is what we meant when we talked about <font color = "green">interindividual differences intraindividual change</font> before. Remember, that looks like this: 
 
 ```{r}
 pers_dat %>%
@@ -204,11 +220,49 @@ pers_dat %>%
     theme(legend.position = "none")
 ```
 
-Clearly, people differ both in baseline personality, as well as change in personality. These are our **random effects**, and the variability suggests that we want to model these. 
+Clearly, people differ both in baseline personality, as well as change in personality. These are our <font color = "blue"><strong>random effects</strong></font>, and the variability suggests that we want to model these. 
 
-We're still primarily interested in the **fixed effects** which are the group level / between person effects (average personality and average change in personality), but we also want to account for the dependencies in our data by modeling the **random effects**. In other words, we want to model the group and the individuals.  
 
-To this, we'll talk about different *levels* of equations, which will refer to different levels of effects. 
+We're still primarily interested in the <font color = "blue"><strong>fixed effects</strong></font> which are the group level / between person effects (average personality and average change in personality), but we also want to account for the dependencies in our data by modeling the <font color = "blue"><strong>random effects</strong></font>. In other words, we want to model the group and the individuals.  
+
+One way to think about what these MLM/HLM growth models are doing is that they are estimating a model for each person separately, and then estimating group level effects as the averages of the individual models. 
+
+```{r}
+pred_fun <- function(fit){
+  tibble(wave = seq(0,2,.01)) %>% mutate(pred = predict(fit, newdata = .))
+}
+
+nested.ind <- pers_dat %>%
+  gather(key = trait, value = value, BF_A:BF_O, na.rm = T) %>%
+  mutate(trait = str_remove_all(trait, "BF_")) %>%
+  group_by(PROC_SID, trait) %>%
+  nest() %>%
+  mutate(model = map(data, ~lm(value ~ wave, data = .)),
+         tidy = map(model, tidy), 
+         pred = map(model, pred_fun))
+
+nested.ind %>% unnest(tidy)
+```
+
+We can then look calculate the average slopes for each trait and plot: 
+
+```{r}
+nested.ind %>% 
+  filter(PROC_SID %in% sample(unique(pers_dat$PROC_SID), 100)) %>%
+  unnest(pred) %>%
+  ggplot(aes(x = wave, y = pred)) + 
+    geom_line(aes(color = factor(PROC_SID))) + 
+    geom_smooth(method = "lm", se = F, color = "black") +
+    facet_wrap(~trait) +
+    theme_classic() + 
+    theme(legend.position = "none")
+```
+
+The average estimates here are nearly identical to the models we ran before.  
+
+The problem with actually estimating the models this way is that the mdoels of a given individual tend to have larger errors associated with them becuase they have fewer observations (per person). Thus, we don't know the reliability of the average effects when a model is calculated independently. MLM/HLM correct for this by accounting for the lower reliability of individual level effects and "shrinking" the estimates of the individual level effects toward 0 (that is - no effect). Thus, the estimates of MLM/HLM tend to be more conservative than estimates of individual level models.  
+
+How do we do this? HLM/MLM accounts for different group and individual level effects by modeling them at different "levels." Thus, the equations of HLM/MLM also refer to different levels of equations. 
 
 The most basic, and the one we've worked with thus far, is the **Level 1** equation: 
 
@@ -235,11 +289,12 @@ The unconditional model is the one discussed above:
 Level 1: $\hat{Y}_{ij} = \beta_{0j}$  
 Level 2: $\beta_{0j} = \gamma_{00} + r_{0j}$  
 
-The question here is basically whether we need the term $r_{0j}$ -- that is, are there indivdual differences / dependencies  
+The question here is basically whether we need the term $r_{0j}$ -- that is, are there indivdual differences / dependencies?  
 
-Before we talk about what that means, let's run the models. To do so, we'll use a package called `lme4`, which is great package with intuitive syntax for running MLM/HLM in `R`. Just like with the `lm()` function, the formulas are in the form `y ~ x`. The one addition we need is something to tell `lme4` what our grouping/nesting variable is and what random effects to include. We do this by adding an additional term on the right hand side (RHS) of the equation:  `y ~ x + (1 | grouping)`. The parentheses indicate that we are talking about random effects. The left side of the term in parentheses tells us what random effects to include, while the right hand side tells us what the grouping variable is. A 1 on the LHS means that we want a random intercept (0 would be no intercept). 
+Before we talk about what that means, let's run the models. To do so, we'll use a package called `lme4`, which is great package with intuitive syntax for running MLM/HLM in `R`. Just like with the `lm()` function, the formulas are in the form `y ~ x`. The one addition we need is something to tell `lme4` what our grouping/nesting variable is and what random effects to include. We do this by adding an additional term on the right hand side (RHS) of the equation:  `y ~ x + (1 | grouping)`. The parentheses indicate that we are talking about random effects. The left side of the term in parentheses tells us what random effects to include, while the right hand side tells us what the grouping variable is. A 1 on the LHS means that we want a random intercept (-1 would be no intercept). 
 
 ```{r, eval = F}
+# install lme4 if you haven't already
 install.packages("lme4")
 ```
 
@@ -248,7 +303,9 @@ Thus, the corresponding model in our case would be `value ~ 1 + (1 | PROC_SID)`.
 
 ```{r}
 library(lme4)
+# we can keep using our earlier nested data frame. 
 nested.mods <- nested.mods %>%
+  # run the model and get the tidy summaries
   mutate(uc.model = map(data, ~lmer(value ~ 1 + (1 | PROC_SID), data = .)),
          uc.tidy = map(uc.model, broom::tidy))
 ```
@@ -340,10 +397,330 @@ nested.mods$compare
 
 Looks like random slopes added to all the models but Extraversion, indicating that there were significant interindividual differences in intraindividual personality change for A, C, N, and O.  
 
+What does it look like when we add random intercept and slopes to our models?
+```{r}
+# get a subset of subjects to get predictions for
+subs <- sample(unique(pers_dat$PROC_SID), 10)
+pred_fun <- function(fit){
+  crossing(PROC_SID = subs,
+           wave = seq(0, 2, .01)) %>%
+    mutate(pred = predict(fit, newdata = .))
+}
 
-To do: plots of (1) no random effects (2) random int only (random int + slope)  
-Description of level 2 variance and why it matters  
-predicted values / plots
-tables
+nested.mods %>% 
+  # select the models
+  select(trait, uc.model, l.model1, l.model2) %>%
+  # gather the models
+  gather(key = type, value = model, -trait) %>%
+  # run the prediciton function on the models
+  mutate(pred = map(model, pred_fun)) %>%
+  # unnest the results
+  unnest(pred) %>%
+  # recode the names of the models to make more sense
+  mutate(type = factor(mapvalues(type, c("uc.model", "l.model1", "l.model2"),
+    c("Unconditional", "Random Intercept", "Random Slope + Intercept")),
+    c("Unconditional", "Random Intercept", "Random Slope + Intercept"))) %>%
+  # keep only N for demonstrative purposes
+  filter(trait == "N") %>%
+  # plot the results
+  ggplot(aes(x = wave, y = pred, color = factor(PROC_SID))) +
+    geom_line() +
+    # scale_y_continuous(limits = c(1,7), breaks = seq(1,7,2)) +
+    facet_wrap(~type, nrow = 1) +
+    theme_classic() +
+    theme(legend.position = "none")
+```
+
+## Interpretation  
+Now that we've got all the components, let's walk through the `summary()` of an lme4 growth model. 
+```{r}
+summary(nested.mods$l.model2[[1]])
+```
+
+### Fixed Effects  
+Start by looking at the part that says "Fixed effects". This will be most familiar to you and easy to interpret. These are simply the population level (average) effects. In this case we have: 
+
+<font color = "blue><strong>(Intercept)</strong></font>: The average Agreeableness rating at the first wave (2005) was 4.75.  
+<font color = "blue><strong>wave</strong></font>: The average change in personality for each new wave of data was -.01. 
+
+Where are the p-values? Well, these don't really make sense with MLM/HLM for reasons we don't need to get into. Instead, it's better to talk about these in terms of effect size. One way of doing this is by looking at the t-value section, remembering that anything beyond a t of about +/-2 will be "significant" in most cases although there are exceptions to this. The second (arguably better) way is to use confidence intervals, which we'll get to later.  
+
+### Random Effects  
+The random effects are your individual differences. This section will give you variance estimates of the level 1 and 2 (random effect) variances. 
+
+The estimates in the "Groups" PROC_SID are the level 2 random effects. In other words, if we were to extract the level 1 residuals or the level 2 random effects ($r_{0j}$ and $r_{1j}$) and find their variance (old school style, like you learned in intro stats), these would be your variance estimates. The variance of the random intercepts is $\tau_{00}^2$ (0 = intercept), while the variance of the random slopes is $\tau_{11}^2$ (1 = slope). This also gives us a standard deviation, which if you remember, tells us something about the precision of the estimate. 
+
+The estimates in the "Residual" section are the Level 1 residuals. So this would be found by extracting the residuals of the model (e.g. using the `resid()` function) and finding their variance. Ideally this value is small, which indicates that most people don't differ much from the model.  
+
+The only column we haven't discussed in the "Corr" column. In our model, we (implicitly) specified that we not only wanted to model the level 2 variances but also the correlation between level 2 variables, which in this case, means the correlation between random slopes and intercepts. A positive correlation would mean that people with higher scores at baseline tended to show increases in personality over time, while a negative correlation would mean that people with lower scores at baseline tended to show increases. Sometimes we might want to remove this correlation, but that's a topic for a later time.  
+
+### Scaled Residuals  
+The scaled residuals can tell you about how your level 1 residuals are distributed. Remember that we want these to be normally distributed (in an ideal world). You can check these out and see if the estimates seem symmetrical. This isn't a section of primary importance, but it's good to check out.  
+
+### Correlation of Fixed Effects: 
+(I think this is the corrected correlation between wave and the outcome?)
+
+## Confidence Intervals  
+When we work with multilevel models, the frequentist statistics through which we derive p values become more complicated and can be difficult to interpret. Thus, we generally use confidence intervals to help us interpret the results.  
+
+In the general case, confidence intervals are defined as: 
+
+$$CI_{95} = \bar{X} \pm  \Bigg[ t_{.975, df = N-1} \frac{\hat{\sigma}}{\sqrt{N}} \Bigg]$$  
+
+Where $\frac{\hat{\sigma}}{\sqrt{N}}$ is the standard error of the estimate. 
+
+When we use a multilevel model, we need to use a different estimation procedure to estimate the confidence intervals. The two most popular are profile likelihood estimation and through bootstrapping. We're going to focus on bootstrapping. Bootstrapping, in and of itself, is an active area of investigation. But the basic idea is that the more times we can sample with replacement from our data without influencing the parameter estimates, the more stable the parameter is estimated. So essentially, we sample with replacement from our data (each time pulling the same number of samples as are actually in our dataset) many times and estimate the model. Then we average together the estimates. The confidence intervals will be based on the variability of those estimates.  
+
+In R, this is quite simple to do, using the `confint()` function. We just specify the method ("boot") and nsim arguments. We're going to set nsim to 10, which is bad (typically we want to do at least 1000, but that can take a lot of time).  
+
+```{r}
+nested.mods <- nested.mods %>% 
+  mutate(l.CI2 = map(l.model2, ~confint(., method = "boot", nsim = 10)))
+
+nested.mods$l.CI2
+```
+
+
+## Helper Functions  
+There are a number of helper functions meant to help you work with `lme4` objects. I'm going to outline them below: 
+
+### `fixef()`  
+`fixef()` prints the fixed effect results of the model as a vector.  
+```{r}
+fixef(nested.mods$l.model2[[1]])
+```
+
+### `vcov()`  
+`vcov()` prints the variance-covariance matrix of the fixed effects as a class "dpoMatrix".  
+```{r}
+vcov(nested.mods$l.model2[[1]])
+```
+
+### `ranef()`  
+`ranef()` prints the random components of the model (e.g. $r_{0j}$ and $r_{1j}$). Note that these are **not** the estimated slopes and intercepts for each person, but the deviations from the fixed effect slopes and intercepts.  
+```{r}
+head(ranef(nested.mods$l.model2[[1]])[[1]])
+```
+
+### `coef()`  
+`coef()` prints the random slopes and intercepts of the model (e.g. $\beta_{0j} = \gamma_{00} + r_{0j}$ and $\beta_{1j} = \gamma_{10} + r_{1j}$). Note these are the estimated and slopes for each person.  
+```{r}
+head(coef(nested.mods$l.model2[[1]])[[1]])
+```
+
+### `VarCorr()`  
+`VarCorr()` prints the same summary of the random effects you get through the `summary()` command, except that the variances are in standard deviations ($sd = \sqrt{var}$), rather than in variance terms.  In other words, it prints the standard deviation of the empirical bayes estimates of the random effects (level 2 effects) and level 1 residuals, as well as the correlation between the random effects.  
+```{r}
+VarCorr(nested.mods$l.model2[[1]])
+```
+
+### `confint.merMod()`  
+`confint.merMod()` prints the confidence intervals of the bootstrapped models. It can be tricky to join these back up with the estimates, but I'll provide a method for doing that below. Again, using way too few simulations here for time reasons.   
+```{r}
+confint.merMod(nested.mods$l.model2[[1]], method = "boot", nsim = 10)
+```
+
+### `ICC()`  
+ICC prints the ICC of the model. Note that this should only be run with the unconditional model or it's weird to interpret.  
+```{r}
+reghelper::ICC(nested.mods$l.model2[[1]])
+```
+
+## Plotting Results  
+Plotting the results of (the fixed effects of) these models isn't too bad. When we just want to plot the fixed effects, we just have to specify the range of the values since we don't have any other predictors. We do, however, need to specify an additional argument in the predict function. By setting re.form to NA, we tell predict that we just want the fixed effects. If we don't do this, then the predict function will insist you provide a grouping variable (which as a reminder is PROC\_SID for us) and will estimate predicted values separately for each group.    
+```{r}
+pred_fun <- function(fit){
+  tibble(wave = seq(0,2,.01)) %>% mutate(pred = predict(fit, newdata = ., re.form = NA))
+}
+
+nested.mods %>%
+  # get predicted values
+  mutate(l.pred2 = map(l.model2, pred_fun)) %>%
+  # unnest predicted values
+  unnest(l.pred2) %>%
+  # call ggplot 
+  ggplot(aes(x = wave, y = pred, color = trait)) +
+  # draw the lines
+  geom_line() +
+  # create facets
+  facet_wrap(~trait) +
+  # set the theme
+  theme_classic() +
+  # remove the legend
+  theme(legend.position = "none")
+```
+
+Note, we still need confidence bands around the lines to tell us about uncertainty of the estimate. We'll tackle that next week. 
+
+## Creating Tables  
+Creating tables is an art, and there are lots of pieces you might want with HLM/MLM. To that end, I've written a function that can deal with MLM models. You can work through it if you like, but it's basically just meant to join together disparate info from different parts of the model (including confidence intervals) into a unified table. Note that if you decide to use this for "real" models, you should modify the function to up the number of simulation for the confidence intervals.   
+
+```{r}
+table_fun <- function(model){
+  fixed <- broom::tidy(model) %>% filter(group == "fixed") %>%
+    select(term, estimate) 
+  ## add random effects ##
+  rand <- VarCorr(model)[[1]]
+  if(nrow(rand) > 1){
+  rand <- rand[1:nrow(rand), 1:nrow(rand)]
+  }
+  colnames(rand)[colnames(rand) == "(Intercept)"] <- "Intercept"
+  rownames(rand)[rownames(rand) == "(Intercept)"] <- "Intercept"
+  vars <- rownames(rand)
+  rand[upper.tri(rand)] <- NA
+  rand <- data.frame(rand) %>% mutate(var1 = rownames(.)) %>%
+    gather(key = var2, value = estimate, -var1, na.rm = T) %>%
+    mutate(var1 = mapvalues(var1, vars, 0:(length(vars)-1)),
+           var2 = mapvalues(var2, unique(var2), 0:(length(vars)-1))) %>%
+    filter(var1 == var2) %>%
+    unite(var, var1, var2, sep = "") %>%
+    mutate(var = sprintf("$\\tau_{%s}$", var))
+  ## get confidence intervals ##
+  CI <- data.frame(confint.merMod(model, method = "boot", nsim = 10, oldNames = F)) %>%
+    mutate(term = rownames(.)) %>% setNames(c("lower", "upper", "term"))
+  
+  CI %>% filter(term == "sigma") %>%
+    mutate(estimate = sigma(model),
+           term = "$\\sigma^2$",
+           type = "Residuals")
+  
+  ## Get ICC & R2 values ##
+  R2 <- MuMIn::r.squaredGLMM(model)
+  
+  ## format the fixed effects
+  fixed <- fixed %>% left_join(CI %>% filter(!grepl(".sig", term))) %>%
+    mutate(type = "Fixed Parts", term = str_remove_all(term, "[()]"))
+  
+  rand <- rand %>%
+    left_join(
+      CI %>% filter(grepl("sd", term)) %>%
+        mutate(lower = lower^2, upper = upper^2,
+               var = mapvalues(term, unique(term), 0:(length(unique(term))-1)),
+               var = sprintf("$\\tau_{%s%s}$", var, var)) %>% select(-term)) %>%
+    mutate(type = "Random Parts") %>% rename(term = var)
+  
+  mod_terms <- tribble(
+    ~term, ~estimate, ~type,
+    # "ICC", ICC, "Model Terms",
+    "$R^2_m$", R2[1], "Model Terms",
+    "$R^2_c$", R2[2], "Model Terms"
+  )
+  
+  tab <- fixed %>%
+    full_join(rand) %>%
+    mutate(CI = sprintf("[%.2f, %.2f]", lower, upper)) %>%
+    select(-lower, -upper) %>%
+    full_join(mod_terms) %>%
+    mutate(estimate = sprintf("%.2f", estimate)) %>%
+    dplyr::rename(b = estimate) %>%
+    select(type, everything())
+  return(tab)
+}
+```
+
+We can use this function for the models in our table: 
+
+```{r}
+nested.mods <- nested.mods %>% mutate(l.tab2 = map(l.model2, table_fun))
+
+nested.mods %>% unnest(l.tab2)
+```
+
+This function does most of the heavy lifting for us, but we will need to reorganize. With 5 traits, I usually do something like the following: 
+
+```{r}
+(tab <- nested.mods %>% 
+# unnest the table results
+unnest(l.tab2) %>%
+# remove the ICC
+select(-ICC) %>%
+# make the b and CI long for reshaping 
+gather(key = est, value = value, b, CI, na.rm = T) %>%
+# create a new variable joining together the type of term (b, CI) and trait
+unite(tmp, trait, est, sep = ".") %>%
+# change to wide format
+spread(key = tmp, value = value) %>%
+# factor the rows to control rearrangement
+mutate(type = factor(type, levels = c("Fixed Parts", "Random Parts", "Model Terms"))) %>% 
+# rearrange the variables
+arrange(type))
+```
+
+Then, we can use this with `knitr::kable()` and the `kableExtra` package to create a nicely formatted table output.  
+```{r, results = 'asis'}
+options(knitr.kable.NA = '') # make NAs print as blank
+tab %>% 
+  kable(., "html", booktabs = T, escape = F) %>%
+  kable_styling(full_width = F)
+```
+
+This is kind of ugly and not something we would include in a publication, but we can use some functions from the `knitr` and `kableExtra` packages that will allow us to format these tables easily. Here's a few we'll use:  
+
+`knitr::kable()`: this is a super useful function. I'm going to note a few of the arguments that make this super flexible:  
+- format = c("html", "latex"). This argument should be set according to how to plan to knit your document. "html" when you are knitting to html and "latex" when you are knitting to PDF or Word.  
+- booktabs = TRUE. As a practice, I always set booktabs to TRUE. It's just a type of table.  
+- col.names = c(). Set this to set the names of the column. This is especially useful when you need to have spaces in your column names or need to have column names which repeat. Data frames don't like it when you have these, so we set them here.  
+- align = c(). Set the alignment of the columns. This should be a vector of "l", "c", and "r"'s the same length as the number of columns in your data frame.  
+- caption = "". Give a title to your table.  
+
+`kableExtra::kable_styling()`: this function let's you set some of the styling for the table. The main argument you want to set here is full_width = FALSE.  
+
+`kableExtra::add_header_above()`: if you want superordinate headers, use this function. So, for example, in the table below, we have two of the same columns for each of the Big 5, so we can set the superordinate headers for each of these to do that.  
+
+`kableExtra::group_rows()`: We'll talk about this one next week, but I wanted to stick it on your radar.  
+
+```{r, results = 'asis'}
+tab %>% 
+  kable(., "html", booktabs = T, escape = F,
+        # set the column names
+        col.names = c("", "Term", rep(c("b", "CI"), times = 5)),
+        # set column alignment
+        align = c("l", "l", rep("c", 10))) %>%
+  kable_styling(full_width = F) %>%
+  # create floating header above
+  add_header_above(c(" " = 2, "Agreeableness" = 2, "Conscientiousness" = 2, 
+                    "Extraversion" = 2, "Neuroticism" = 2, "Openness" = 2))
+```
+
 
 ## Level 2 Variances -- Individual Differences  
+Thus far, we've talked about Level 2 variances but not about precisely what they are. Level 2 variances are really important because they are, to some degree, what MLM/HLM buy us. They are allowing us to parse the total variance in the data set to different sources. 
+
+Remember -- in simple linear regression, our model comes in the form  
+$$Y_{i} = b_0 + b_1*X_{1i} + ... + b_p*X_{pi} + \epsilon_{i}$$  
+where $p$ is the number of predictors, the $i$ subscript denotes an individual observation, and $\epsilon_i$ is the residual for each person. In this case, the residuals are just the unexplained variance. 
+
+In MLM/HLM, our model is in the form:  
+Level 1: $Y_{ij} = \beta_{0j} + \beta_{1j}*X_{1j} + ... + \beta_{pj}*X_{pj} + \epsilon_{ij}$  
+Level 2:  
+  $\beta_{0j} = \gamma_{00} + r_{0j}$  
+  $\beta_{1j} = \gamma_{10} + r_{1j}$  
+  ...  
+  $\beta_{pj} = \gamma_{p0} + r_{pj}$  
+
+The terms, $r_{0j}$ to $r_{pj}$ are also residuals, indexing specifically how much the model misses each person on each of the different Level 1 predictors. The idea is basically that the bigger the level 2 residual terms, the worse we are capturing someone on average. In growth models, we use this to our advantage because they tell us something about individual differences in mean levels and change, but often we want to reduce these as much as possible by adding predictors that explain the mean levels or patterns of change. 
+
+But the trick is that we only have these variances when we add the random effects. So, for example, in the model in which we had a random intercept but no random slope, the variance in change from the average slope at the person level was subsumed into the $\epsilon_{ij}$ term (roughly, in practice adding additional level 1 and 2 predictors can influence this). Thus, we can't really distinguish where that noise is coming from when there isn't a random effect. Does that mean we should just add the random effects we can? No, because if the random effect isn't really doing anything (deviations from the average effect are quite small), then the level 2 variances will be small and can be dropped. And we can compare models with and without a specific random effect to test whether we can add or drop terms. 
+
+Remember from the summary output that, by default, we not only had the variances of each of the random terms but also the correlations among them (e.g. $cor(r_{0j}, r_{1j})$). Because of this, when we talk about Level 2 effects, we often think of them in matrix form, which is called the tau ($\tau$) matrix. 
+
+The number of rows and columns of the tau matrix will be equal to the number of random effects included in the model. So, if we have a random slope and intercept, then the tau matrix would be 2x2.  
+
+$$\begin{bmatrix}
+\tau_{00}^2 & \tau_{01}\\
+\tau_{10} & \tau_{11}^2\\
+\end{bmatrix}$$
+
+Or, in the more general form for $r$ random effects.  
+
+$$\begin{bmatrix}
+\tau_{00}^2 & \tau_{01} & ... & \tau_{0r}\\
+\tau_{10} & \tau_{11}^2 & ... & \tau_{1r}\\
+... & ... & ... & ... \\
+\tau_{r0} & \tau_{r1} & ... & \tau_{rr}^2
+\end{bmatrix}$$  
+
+Why is this important to note? Well, remember from multiple regression that more parameters will always explain more variance, but that we have to balance the number of parameters we add such that they actually add something useful to the model. Every time we add a random effect, we are not adding just 1 parameter because we are adding one variance for that random effect ($\tau_{rr}^2$) as well as covariances between that random effect and all others. 
+
+So, for example, if we had 2 random effects, we would be estimating 3 level 2 paramters in the tau matrix. But if we add 1 more, we will be estimating a total of 6 level 2 parameters in the tau matrix. In other words, for each additional random effect we add to the model, we will be adding additional paramters equal to the number total random effects in the (so if we had 1 and 1 more, we would be adding 1 + 1 = 2 new parameters, while if we had 2 and added 1, we would be adding 2 + 1 = 3 paramters for a total of 6). 
+
