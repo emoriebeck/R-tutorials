@@ -71,7 +71,7 @@ read_fun <- function(file, year){
   print(year)
   old.names <- (codebook %>% filter(Year == year & class %in% c("group", "predictor", "proc")))$Item
   new.names <- (codebook %>% filter(Year == year & class %in% c("group", "predictor", "proc")))$new_name
-  z <- haven::read_sav(url(sprintf("%s/data/%sp.sav?raw=true", wd, file))) %>%
+  z <- read_csv(url(sprintf("%s/data/%sp.csv?raw=true", wd, file))) %>%
     select(one_of(all.old.cols), one_of(old.names)) %>%
     setNames(c(all.new.cols, new.names)) 
 }
