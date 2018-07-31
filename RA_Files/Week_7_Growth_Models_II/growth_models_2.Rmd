@@ -50,19 +50,19 @@ For help with this, see https://emoriebeck.github.io/R-tutorials/purrr/. I'll gi
 Once you've got the codebook, we should be ready to go. 
 
 ```{r}
-# wd <- "https://github.com/emoriebeck/R-tutorials/blob/master/RA_Files/Week_7_Growth_Models_II"
-wd <- "~/Documents/Github/R-tutorials/RA_Files/Week_7_Growth_Models_II"
+wd <- "https://github.com/emoriebeck/R-tutorials/blob/master/RA_Files/Week_7_Growth_Models_II"
+# wd <- "~/Documents/Github/R-tutorials/RA_Files/Week_7_Growth_Models_II"
 # load your codebook 
-# destfile <- "Codebook_EDB.xlsx"
-# curl::curl_download(sprintf("%s/Codebook_EDB.xlsx?raw=true", wd), destfile)
-# codebook <- readxl::read_excel(destfile) %>%
-codebook <- readxl::read_excel(sprintf("%s/Codebook_EDB.xlsx", wd)) %>%
+destfile <- "Codebook_EDB.xlsx"
+curl::curl_download(sprintf("%s/Codebook_EDB.xlsx?raw=true", wd), destfile)
+codebook <- readxl::read_excel(destfile) %>%
+# codebook <- readxl::read_excel(sprintf("%s/Codebook_EDB.xlsx", wd)) %>%
   mutate(Item = stringr::str_to_lower(Item))
 ```
 
 ```{r}
-# data_path <- "https://github.com/emoriebeck/R-tutorials/blob/master/RA_Files/Week_5_Logistic_Regression"
-data_path <- "~/Documents/Github/R-tutorials/RA_Files/Week_5_Logistic_Regression"
+data_path <- "https://github.com/emoriebeck/R-tutorials/blob/master/RA_Files/Week_5_Logistic_Regression"
+# data_path <- "~/Documents/Github/R-tutorials/RA_Files/Week_5_Logistic_Regression"
 
 all.old.cols <- (codebook %>% filter(class == "proc" & Year == 0))$Item
 all.new.cols <- (codebook %>% filter(class == "proc" & Year == "0"))$new_name
