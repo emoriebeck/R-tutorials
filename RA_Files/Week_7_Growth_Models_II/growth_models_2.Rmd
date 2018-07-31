@@ -1,19 +1,12 @@
 ---
-title: "Conditional Models"
+title: "Growth Models II"
 author: "Emorie D Beck"
-date: "9/7/2017"
 output: 
-  pdf_document:
-    keep_tex: yes
-    toc: yes
-    includes:
-            in_header:
-                header.tex
   html_document:
     theme: united
     highlight: tango
     df_print: paged
-    code_folding: show
+    code_folding: hide
     toc: true
     toc_float: true
 editor_options: 
@@ -21,7 +14,7 @@ editor_options:
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = T, eval = T, cache = T, warning = F, message = F)
+knitr::opts_chunk$set(echo = T, eval = T, warning = F, message = F)
 ```
 
 # Workspace 
@@ -30,12 +23,15 @@ knitr::opts_chunk$set(echo = T, eval = T, cache = T, warning = F, message = F)
 ```{r}
 library(psych)
 library(broom)
+library(lme4)
+library(knitr)
+library(kableExtra)
 library(plyr)
 library(tidyverse)
 ```
 
 ## Data  
-This week, our data are going to (continue to) come from the German Socioeconomic Panel Study (GSOEP). The GSOEP is a longitudinal study of adults in German housesholds. The study has a broad range of variables, but for our purposes we're just going to use personality ratings, life events, age, gender, and general life satisfaction from 2005 to 2015. We'll create a composite of life satisfaction for one of our tests of moderators. We'll use life events similarly to how we did for logistic regression, except this time as a moderator variable.    
+This week, our data are going to (continue to) come from the German Socioeconomic Panel Study (GSOEP). The GSOEP is a longitudinal study of adults in German housesholds. The study has a broad range of variables, but for our purposes we're just going to use personality ratings, life events, age, gender, and general life satisfaction from 2005 to 2015. We'll use life satisfaction from 2005 this week, but keep the other years for future use when we do time-varying moderators. We'll use life events similarly to how we did for logistic regression, except this time as a moderator variable.    
 
 We need to extend our codebook. To create it, go to https://data.soep.de/soep-core# and use the search feature to find the variables you need or https://data.soep.de/soep-long/topics/ where you can scroll through topics (this may be easier for finding the personality variables). Use your codebook from last week, and add the additional variables.   
 
@@ -154,7 +150,8 @@ pers_dat <- dat %>%
   group_by(trait, PROC_SID, PROC_household, Year, Dem_DOB, age, Dem_Sex, gender) %>%
   summarize(value = mean(value, na.rm = T)) %>%
   spread(key = trait, value = value) %>% 
-  ungroup()
+  ungroup() %>%
+  mutate(wave = as.numeric(Year) - 2005)
 ```
 
 ### Life Events
@@ -173,11 +170,12 @@ le_dat <- dat %>% select(-contains("BF")) %>%
 ```{r}
 dat_final <- pers_dat %>% 
   full_join(le_dat) %>% 
-  full_join(dat %>% filter(Year == 2005) %>% select(PROC_SID, Psych_LifeSat))
+  full_join(dat %>% filter(Year == 2005) %>% select(PROC_SID, Psych_LifeSat)) %>%
+  mutate(wave = as.numeric(Year) - 2005)
 ```
 
 # Adding Predictors in MLM/HLM  
-Last week, we talked about building simple longitudinal models in R using MLM/HLM. This week, we're going to extend the "simple" MLM growth curve model to include additional predictors. Depending on the type of predictor, you can add these predictors at level 1 or level 2. Figuring out which level your covariates are at is very important. Part of this will have to do with whether you expect level 1 and level 2 variables to interact. 
+Last week, we talked about building simple longitudinal models in R using MLM/HLM. This week, we're going to extend the "simple" MLM growth curve model to include additional predictors. Depending on the type of predictor, you can add these predictors at level 1 or level 2. Figuring out which level your covariates are at is very important. Part of this will have to do with whether you expect level 1 and level 2 variables to interact.  
 
 To demonstrate what I mean by this, we can start by considering the case where we want to add a covariate like age at level 1, where we want to partial out how age influences the model, but not to see how personality changes over time as a function of age. 
 
@@ -201,7 +199,8 @@ $Y_{ij} = \gamma_{00} + U_{0j} + (\gamma_{10} + U_{1j})*time_{ij} + (\gamma_{20}
 So in this case, we are just adding one addition term (a fixed effect age term), which we would interpret the same as we would if we added an age variable in multiple regression. 
 
 ## Additional Level 2 Covariate  
-Sometimes, we are interested in covariates that we expect to interact with our level 1 covariates, but we have no reason to think that we should 
+Sometimes, we are interested in covariates that we expect to interact with our level 1 covariates, but we have no reason to think that we should  
+
 **Level 1**: $Y_{ij} = \beta_{0j} + \beta_{1j}*time_{ij} + \varepsilon_{ij}$  
 **Level 2**:  
 Intercept: $\beta_{0j} = \gamma_{00} + \gamma_{01}*life\_sat\_w1_{j} + U_{0j}$ (random intercept)  
@@ -221,7 +220,7 @@ sample_subs <- sample(unique(pers_dat$PROC_SID), 300)
 pers_dat %>%
   filter(PROC_SID %in% sample_subs) %>%
   gather(key = Trait, value = value, BF_A:BF_O, na.rm = T) %>%
-  ggplot(aes(x = Year, y = value)) + 
+  ggplot(aes(x = wave, y = value)) + 
     geom_smooth(aes(group = PROC_SID), method = "lm", se = F, color = "gray", size = .2) +
     geom_smooth(method = "lm", se = F, color = "purple", size = 1) +
     labs(x = "Year", y = "Personality Composite", title = "Simple Growth Curve") +
@@ -236,8 +235,7 @@ pers_dat %>%
 ## In R
 \small
 ```{r}
-library(lme4)
-(unconditional_model <- unique(dat_final %>% select(PROC_SID:BF_O, Psych_LifeSat)) %>%
+(unconditional_model <- unique(dat_final %>% select(PROC_SID:BF_O, Psych_LifeSat, wave)) %>%
   gather(key = Trait, value = value, BF_A:BF_O, na.rm = T) %>%
   group_by(Trait, PROC_SID) %>%
   mutate(n = n(), Year = as.numeric(Year)) %>% filter(n > 1) %>%
@@ -246,9 +244,26 @@ library(lme4)
   mutate(model = map(data, ~lmer(value ~ 1 + (1|PROC_SID), data = .)),
          ICC = map_dbl(model, reghelper::ICC),
          summary = map(model, ~print(summary(.)))))
+# Thus, we see that we have due cause to use an HLM -- the ICC of the unconditional models was `r round((unconditional_model %>% filter(Trait == "BF_A"))$ICC,2)` (A), `r round((unconditional_model %>% filter(Trait == "BF_C"))$ICC,2)` (C), `r round((unconditional_model %>% filter(Trait == "BF_E"))$ICC,2)` (E), `r round((unconditional_model %>% filter(Trait == "BF_N"))$ICC,2)` (N), and `r round((unconditional_model %>% filter(Trait == "BF_O"))$ICC,2)` (O).  
 ```
 
-Thus, we see that we have due cause to use an HLM -- the ICC of the unconditional models was `r round((unconditional_model %>% filter(Trait == "BF_A"))$ICC,2)` (A), `r round((unconditional_model %>% filter(Trait == "BF_C"))$ICC,2)` (C), `r round((unconditional_model %>% filter(Trait == "BF_E"))$ICC,2)` (E), `r round((unconditional_model %>% filter(Trait == "BF_N"))$ICC,2)` (N), and `r round((unconditional_model %>% filter(Trait == "BF_O"))$ICC,2)` (O).  
+Like last week, we can break down this output into its component parts: 
+
+### Fixed Effects  
+Start by looking at the part that says "Fixed effects". This will be most familiar to you and easy to interpret. These are simply the population level (average) effects. In this case we have: 
+
+In this case, for the fixed effects, we only have an intercept because this is the unconditional model. The intercept here is just the average of the outcome variable.  
+
+### Random Effects  
+The random effects are your individual differences. This section will give you variance estimates of the level 1 and 2 (random effect) variances. 
+
+Because this is the unconditional model, we have only a random intercept variance, which tells us how much people differ in average levels of the outcome. Then, we would typically look at the ICC to see if we are capturing a fair amount of the variability in the outcome by estimating something separately for each person. 
+
+The estimates in the "Residual" section are the Level 1 residuals. So this would be found by extracting the residuals of the model (e.g. using the `resid()` function) and finding their variance. Ideally this value is small, which indicates that most people don't differ much from the model.  
+
+
+### Scaled Residuals  
+The scaled residuals can tell you about how your level 1 residuals are distributed. Remember that we want these to be normally distributed (in an ideal world). You can check these out and see if the estimates seem symmetrical. This isn't a section of primary importance, but it's good to check out.  
 
 ## Conditional Models: Adding Predictors
 Let's see if we can better predict participants' change in sensation seeking over time by adding covariates.  
@@ -275,7 +290,7 @@ sample_subs <- sample(dat_final$PROC_SID, 300)
 dat_final %>%
   filter(PROC_SID %in% sample_subs & !is.na(Year)) %>%
   gather(key = Trait, value = value, BF_A:BF_O) %>%
-  ggplot(aes(x = Year, y = value)) + 
+  ggplot(aes(x = wave, y = value)) + 
     geom_smooth(aes(group = PROC_SID, color = Psych_LifeSat), method = "lm", se = F, size = .2) +
     geom_smooth(method = "lm", se = F, color = "red", size = 1) +
     labs(x = "Year", y = "Personality Composite", title = "Simple Growth Curve") +
@@ -287,27 +302,58 @@ dat_final %>%
           plot.title = element_text(face = "bold", size = rel(1.2), hjust = .5))
 ```
 
-\small
+
 ```{r,results='hide'}
 # no random slope
 unconditional_model <- unconditional_model %>% 
-  mutate(mod1 = map(data, ~lmer(value ~ Year + Psych_LifeSat + Year*Psych_LifeSat + 
+  mutate(mod1 = map(data, ~lmer(value ~ wave + Psych_LifeSat + wave*Psych_LifeSat + 
                                   (1|PROC_SID), data = .)),
          summary1 = map(mod1, ~print(summary(.))))
 ```
 
 
-Now, let's add a random slope and compare the models
+Now, let's add a random slope and compare the models. A couple of these will fail to converge, but we'll get to how to deal with that later.  
 
 ```{r}
 # random slope and intercept
 unconditional_model <- unconditional_model %>% 
-  mutate(mod2 = map(data, ~lmer(value ~ Year + Psych_LifeSat + Year*Psych_LifeSat + 
+  mutate(mod2 = map(data, ~lmer(value ~ wave + Psych_LifeSat + wave*Psych_LifeSat + 
                                   (Year | PROC_SID), data = .)),
          summary2 = map(mod2, ~print(summary(.))))
 ```
 
+As before, let's unpack the results of one of the models (Agreeableness and Child Birth):  
+```{r}
+unconditional_model$summary2[[1]]
+```
+
+#### Fixed Effects  
+Start by looking at the part that says "Fixed effects". This will be most familiar to you and easy to interpret. These are simply the population level (average) effects. In this case we have: 
+
+<font color = "blue><strong>(Intercept)</strong></font>: The average Agreeableness rating at wave 0 would be 4.53.  
+<font color = "blue><strong>wave</strong></font>: The average change in personality for each new wave of data was .007.  
+<font color = "blue><strong>Psych\_LifeSat</strong></font>: A one unit change in life satisfaction is associated with a .03 increase in Agreeabelness. More satisfied people are more Agreeable!  
+<font color = "blue><strong>wave:Psych\_LifeSat</strong></font>: Agreeableness doesn't appear to change as a function of both wave and life satisfaction.  
+
+#### Random Effects  
+The random effects are your individual differences. This section will give you variance estimates of the level 1 and 2 (random effect) variances. 
+
+The estimates in the "Groups" PROC_SID are the level 2 random effects. In other words, if we were to extract the level 1 residuals or the level 2 random effects ($r_{0j}$ and $r_{1j}$) and find their variance (old school style, like you learned in intro stats), these would be your variance estimates. The variance of the random intercepts is $\tau_{00}^2$ (0 = intercept), while the variance of the random slopes is $\tau_{11}^2$ (1 = slope). This also gives us a standard deviation, which if you remember, tells us something about the precision of the estimate. 
+
+The estimates in the "Residual" section are the Level 1 residuals. So this would be found by extracting the residuals of the model (e.g. using the `resid()` function) and finding their variance. Ideally this value is small, which indicates that most people don't differ much from the model.  
+
+The only column we haven't discussed in the "Corr" column. In our model, we (implicitly) specified that we not only wanted to model the level 2 variances but also the correlation between level 2 variables, which in this case, means the correlation between random slopes and intercepts. A positive correlation would mean that people with higher scores at baseline tended to show increases in personality over time, while a negative correlation would mean that people with lower scores at baseline tended to show increases. Sometimes we might want to remove this correlation, but that's a topic for a later time. <font color = "green">In this case, we see that the variables are almost perfectly correlated.</font> That is likely a scaling issue that led to the non-convergence. There are ways to fix this (e.g. if we grand mean centered Psych\_LifeSat. I encourage you to rerun the above with a centered life satisfaction variable if you're curious. For now, this document will be long enough).    
+
+#### Scaled Residuals  
+The scaled residuals can tell you about how your level 1 residuals are distributed. Remember that we want these to be normally distributed (in an ideal world). You can check these out and see if the estimates seem symmetrical. This isn't a section of primary importance, but it's good to check out.  
+
+#### Correlation of Fixed Effects: 
+(I think this is the corrected correlation between wave and the outcome?)
+
 #### Plots  
+We will plot these very similar to how we plotted moderated effects before. The only difference will be that we need to add the argument `re.form = NA` to the predict function.  
+
+Look at the graphs, what do you think this tells us about the relationship between personality, personality change, and life satisfaction?  
 ```{r}
 fixed.frame <- unique(dat_final %>% select(PROC_SID, Psych_LifeSat)) %>%
   summarise(mean = mean(Psych_LifeSat, na.rm = T), 
@@ -315,7 +361,7 @@ fixed.frame <- unique(dat_final %>% select(PROC_SID, Psych_LifeSat)) %>%
 
 pred_fun <- function(fit){
   crossing(
-      Year = seq(2005,2013,4), 
+      wave = seq(0,8,1), 
       Psych_LifeSat = c(fixed.frame$mean-fixed.frame$sd,
                      fixed.frame$mean,
                      fixed.frame$mean+fixed.frame$sd)
@@ -323,19 +369,20 @@ pred_fun <- function(fit){
     mutate(pred = predict(fit, newdata = ., re.form = NA))
 }
 
-nested.mods <- nested.mods %>%
+unconditional_model <- unconditional_model %>%
   mutate(pred1 = map(mod1, pred_fun), 
          pred2 = map(mod2, pred_fun))
 
-nested.mods %>% unnest(pred1) %>%
+unconditional_model %>% unnest(pred1) %>%
   mutate(group = mapvalues(Psych_LifeSat, unique(Psych_LifeSat), c("-1SD", "0SD", "1SD"))) %>%
-  ggplot(aes(x = Year, y = pred, color = group)) +
+  ggplot(aes(x = wave, y = pred, color = group)) +
   geom_line() + 
   facet_wrap(~Trait, nrow = 2) +
   theme_classic()
 ```
 
 #### Tabling Results  
+The function below is the same one from before. I just included it again for reference.  
 ```{r}
 table_fun <- function(model){
   fixed <- broom::tidy(model) %>% filter(group == "fixed") %>%
@@ -407,7 +454,7 @@ unconditional_model <- unconditional_model %>% mutate(l.tab2 = map(mod2, table_f
 unconditional_model %>% unnest(l.tab2)
 ```
 
-This function does most of the heavy lifting for us, but we will need to reorganize. With 5 traits, I usually do something like the following: 
+This function does most of the heavy lifting for us, but we will need to reorganize. With 5 traits, I usually do something like the following:  
 
 ```{r}
 (tab <- unconditional_model %>% 
@@ -463,7 +510,7 @@ sample_subs <- c(sample((dat_final %>% filter(LE_ChldBrth == 0))$PROC_SID, 100),
 dat_final %>% 
   filter(PROC_SID %in% sample_subs) %>%
   gather(key = Trait, value = value, BF_A:BF_O, na.rm = T) %>%
-  ggplot(aes(x = Year, y = value, color = factor(LE_ChldBrth))) +
+  ggplot(aes(x = wave, y = value, color = factor(LE_ChldBrth))) +
     geom_smooth(aes(group = PROC_SID),method = "lm", se = F, size = .2) +
     geom_smooth(method = "lm", se = F, size = 1) +
     labs(x = "Year", y = "Personality Composite Score", color = NULL,
@@ -478,7 +525,7 @@ dat_final %>%
 
 
 And model it:  
-\small
+
 ```{r}
 nested.mods <- dat_final %>%
   gather(key = Trait, value = value, BF_A:BF_O, na.rm = T) %>%
@@ -492,24 +539,49 @@ nested.mods <- dat_final %>%
 
 # no random slope
 nested.mods <- nested.mods %>%
-  mutate(mod1 = map(data, ~lmer(value ~ Year + le_value + Year:le_value + 
+  mutate(mod1 = map(data, ~lmer(value ~ wave + le_value + wave:le_value + 
                                   (1|PROC_SID), data = .)),
-         summary1 = map(mod1, ~print(summary(.))))
+         summary1 = map(mod1, ~summary(.)))
 # add a random slope
 nested.mods <- nested.mods %>%
-  mutate(mod2 = map(data, ~lmer(value ~ Year + le_value + Year:le_value + 
+  mutate(mod2 = map(data, ~lmer(value ~ wave + le_value + wave:le_value + 
                                   (Year|PROC_SID), data = .)),
-         summary2 = map(mod2, ~print(summary(.))))
+         summary2 = map(mod2, ~summary(.)))
 
 (nested.mods %>%
-  mutate(comp = map2(mod1, mod2, anova)))$comp
+  mutate(comp = map2(mod1, mod2, anova)))$comp[[1]]
 ```
+
+
+As before, let's unpack the results of one of the models (Agreeableness and Child Birth):  
+```{r}
+nested.mods$summary2[[1]]
+```
+
+#### Fixed Effects  
+Start by looking at the part that says "Fixed effects". This will be most familiar to you and easy to interpret. These are simply the population level (average) effects. In this case we have: 
+
+<font color = "blue><strong>(Intercept)</strong></font>: The average Agreeableness rating at wave 0 would be 4.53.  
+<font color = "blue><strong>wave</strong></font>: The average change in personality for each new wave of data was .007.  
+<font color = "blue><strong>le\_value</strong></font>: Someone who had a child has an average Agreeableness score that is .03 higher than someone who didn't.  
+<font color = "blue><strong>wave:le\_value</strong></font>: People who experience a life event don't change differently than those who didn't.  
+
+#### Random Effects  
+The random effects are your individual differences. This section will give you variance estimates of the level 1 and 2 (random effect) variances. 
+
+These are the same as we discussed before for the continuous moderator. You'll notice that these estimates differ in magnitude. That's because they are basically the individual differences in mean level personality and personality change that can't be accounted for by our predcitors.  
+
+#### Scaled Residuals  
+The scaled residuals can tell you about how your level 1 residuals are distributed. Remember that we want these to be normally distributed (in an ideal world). You can check these out and see if the estimates seem symmetrical. This isn't a section of primary importance, but it's good to check out.  
+
+#### Correlation of Fixed Effects: 
+(I think this is the corrected correlation between wave and the outcome?)
 
 #### Plots  
 ```{r}
 pred_fun <- function(fit){
   crossing(
-      Year = seq(2005,2013,4), 
+      wave = seq(0,8,1), 
       le_value = factor(c(0,1))
       ) %>%
     mutate(pred = predict(fit, newdata = ., re.form = NA))
@@ -520,7 +592,7 @@ nested.mods <- nested.mods %>%
          pred2 = map(mod2, pred_fun))
 
 nested.mods %>% unnest(pred1) %>%
-  ggplot(aes(x = Year, y = pred, color = le_value)) +
+  ggplot(aes(x = wave, y = pred, color = le_value)) +
   geom_line() + 
   facet_grid(Event~Trait) +
   theme_classic()
@@ -555,27 +627,40 @@ Then, we can use this with `knitr::kable()` and the `kableExtra` package to crea
 
 ```{r, results = 'asis'}
 tab %>% 
+  filter(type == "Fixed Parts") %>%
   knitr::kable(., "html", booktabs = T, escape = F,
         # set the column names
-        col.names = c("", "Term", rep(c("b", "CI"), times = 5)),
+        col.names = c("", "Event", "Term", rep(c("b", "CI"), times = 5)),
         # set column alignment
         align = c("l", "l", rep("c", 10))) %>%
   kable_styling(full_width = F) %>%
   # create floating header above
-  add_header_above(c(" " = 2, "Agreeableness" = 2, "Conscientiousness" = 2, 
+  add_header_above(c(" " = 3, "Agreeableness" = 2, "Conscientiousness" = 2, 
                     "Extraversion" = 2, "Neuroticism" = 2, "Openness" = 2))
 ```
 
 ### Random Effects
 We often also want to plot random effects to look at individual level trajectories / variability. Again, we need to use the `predict()` function to get these values. You can also totally use matrix algebra if you're like me and want to know what's happening "under the hood."  
 #### Categorical
-```{r}
-tbl_df(mod3g@frame) %>% select(PROC_CID, age0, groups) %>%
-  mutate(pred = predict(mod3g, newdata = .)) %>%
-  ggplot(aes(x = age0, y = pred, group = PROC_CID, color = groups)) +
+```{r, fig.height = 12}
+ran_pred_fun <- function(fit){
+tbl_df(fit@frame) %>% 
+  mutate(pred = predict(fit, newdata = .))   
+}
+nested.mods <- nested.mods %>% 
+  mutate(ran_pred1 = map(mod1, ran_pred_fun),
+         ran_pred2 = map(mod2, ran_pred_fun)) 
+
+sample_subs <- c(sample((dat_final %>% filter(LE_ChldBrth == 0))$PROC_SID, 100),
+                 sample((dat_final %>% filter(LE_ChldBrth == 1))$PROC_SID, 100))
+
+nested.mods %>% unnest(ran_pred2) %>%
+  filter(PROC_SID %in% sample_subs) %>%
+  ggplot(aes(x = wave, y = pred, group = PROC_SID, color = le_value)) +
     geom_line(size = .5, alpha = .5) +
-    labs(x = "Age", y = "Predicted Sensation Seeking", 
-         title = "Predicted Random Effect Trajectories\nfor the 3 Group Model") +
+    labs(x = "Year", y = "Predicted Personality Composite", 
+         title = "Predicted Random Effect Trajectories") +
+    facet_grid(Event ~ Trait) +
     theme_classic() +
     theme(axis.text = element_text(face = "bold", size = rel(1.2)),
           axis.title = element_text(face = "bold", size = rel(1.2)),
@@ -583,14 +668,22 @@ tbl_df(mod3g@frame) %>% select(PROC_CID, age0, groups) %>%
           plot.title = element_text(face = "bold", size = rel(1.2), hjust = .5))
 ```
 
-#### Categorical
+#### Continuous
 ```{r}
-mod1b@frame %>% select(-SensSeek) %>%
-  mutate(pred = predict(mod1b)) %>%
-  ggplot(aes(x = age0, y = pred, group = PROC_CID, color = DemPweight)) +
+sample_subs <- sample(unique(dat_final$PROC_SID), 200)
+
+unconditional_model <- unconditional_model %>% 
+  mutate(ran_pred1 = map(mod1, ran_pred_fun),
+         ran_pred2 = map(mod2, ran_pred_fun)) 
+
+unconditional_model %>% 
+  unnest(ran_pred2) %>%
+  filter(PROC_SID %in% sample_subs) %>%
+  ggplot(aes(x = wave, y = pred, group = PROC_SID, color = Psych_LifeSat)) +
     geom_line(size = .5, alpha = .5) +
-    labs(x = "Age", y = "Predicted Sensation Seeking", 
-         title = "Predicted Random Effect Trajectories\nfor the 3 Group Model") +
+    labs(x = "Age", y = "Predicted Personality Composite", 
+         title = "Predicted Random Effect Trajectories") +
+    facet_wrap(~ Trait, nrow = 2) +
     theme_classic() +
     theme(axis.text = element_text(face = "bold", size = rel(1.2)),
           axis.title = element_text(face = "bold", size = rel(1.2)),
