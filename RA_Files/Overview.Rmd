@@ -1,0 +1,155 @@
+---
+title: "Untitled"
+author: "Emorie Beck"
+date: "2/18/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+The following are documents created for teaching purposes with summer undergraduate research assistants in the Personality Measurement and Development Lab at Washington University in St. Louis in 2018. 
+
+For seven weeks, the research assistants essentially "piloted" a program in which each week, they were introduced to new personality, statistical, and R-based techniques (scaled by week). 
+
+Each week included outside readings (often targeted for to the personality theory side although sometimes to the statistical side as well), Data Camp R tutorials, and a set of .Rmd files that integrated the theory, statistical, and R-based concepts in a unified document where they applied their knowledge to real data sets (open datasets to be used for educational purposes ONLY).
+
+The weekly breakdown was as follows: 
+1. What is Personality? (And how do we measure it?)  
+2. Personality Correlates  
+3. Lifespan Personality (Cross-Sectional)  
+4. Moderators of Personality  
+5. Personality Selection  
+6. Personality Development (Longitudinal)  
+7. Personality Development Continued (Longitudinal)  
+8. Personality Variability (to be implemented eventually)  
+
+# What is Personality? (And how do we measure it?)  
+
+## Statistics: Reliability  
+Inter-item correlations  
+Item-total correlations  
+Split-half correlations  
+Spearman Brown Prophecy Formula  
+Cronbach's Alpha  
+
+ppt slides
+
+## R Skills  
+blank script 
+Completed script  
+
+## Readings  
+Furr, Scale Development, Ch. 1-2
+
+# Week 2: Personality Correlates  
+
+## Statistics  
+Data Camp Tutorial: "Intro to Statistics with R: Correlation and Linear Regression"
+
+## R Skills  
+Data Camp Tutorials: 
+- Communicating Data in the Tidyverse  
+- Data Manipulation with dplyr  
+- Foundations of Probability in R  
+
+Blank script
+Completed script
+
+## Readings  
+Roberts et al. (2007) 
+Ozer & Benet-Martinez (2006)
+
+# Week 3: Lifespan Personality (Cross-Sectional)  
+As I mentioned, this week, we’ll work with multiple regression and learn about cross-sectional age differences in personality. This week will be foundational because it will lay the foundation, both theoretically and statistically, for what we’ll be doing the rest of the summer. For that reason, I’m about to throw a bunch of content at you.  
+
+## Statistics
+1. Intro to Statistics with R: Multiple Regression assignment on data camp.
+2. Read Ch. 22-24 in R for Data Science. http://r4ds.had.co.nz/model-intro.html. Be sure to do the code parts along with the book
+3. Read Ch. 15 in Learning Statistics with R. http://compcogscisydney.org/lsr/lsr-0.6.pdf
+
+## R Skills
+Do the: 
+1. Intermediate R assignment on data camp. This will touch on foundational parts of programming more broadly, like conditionals and loops.
+2.  Writing Functions in R assignment on data camp. Second to `purrr`, I think functions are extremely under appreciated in statistical programming.
+3. Read Chapter 19 in R for Data Science. http://r4ds.had.co.nz/functions.html  
+
+Blank script
+Completed Script
+
+## Readings  
+One is on cross-sectional age differences throughout the lifespan, one is and the other is a great book chapter on all the ways we can look at personality development. As you read these, think about (1) how different types of ways measuring personality development might influence what development is (or isn’t) seen and (2) why you think age differences in personality traits exist (we’ll read more on this in a couple of weeks).  
+
+Roberts, Wood, and Caspi (2014)  
+Soto et al. (2011)  
+
+# Week 4: Moderators of Personality  
+This week, we’re wapping up our discussion of “regular” regression. Next week, then, we’ll briefly hit logistic regression then move on to longitudinal methods. There’s lot of little pieces about regression we’ll pick up along the way this week that are really important. Moreover, moderation is arguably one of our most valuable tools in regression. 
+
+## Statistics  
+Do the "Intro to Statistics with R: Moderation and Mediation” assignment in data camp. Don’t worry about the mediation part. We won’t be talking about mediation. You’ll also find a bunch of info about moderation in the .Rmd file I made for this week. I’m still trying to dig up another tutorial. I’ll let you know if I find something that meets my standards.  
+
+## R Skills  
+This week, I want you to start working with iteration. You should have gotten an intro to this last week in the "Intermediate R" Data Camp course. This week, we’ll extend that knowledge and learn some alternative ways of doing loops in R. 
+	a. First, do this tutorial: https://www.datacamp.com/community/tutorials/tutorial-on-loops-in-r. 
+	b. Second, do the swirl lessons on lapply and sapply (installation: https://swirlstats.com/students.html)
+	c. Third, read this short tutorial on purrr, another alternative to iteration (and my personal fave) https://emoriebeck.github.io/R-tutorials/purrr/  
+	
+## Readings  
+This week, I want to give you guys a look at some work in the PMaD lab, so we’ll read two papers by former students of the lab (Sara Weston and Anissa Mike). Note that these will have slightly more complicated analyses than we’ve done so far, so focus on understanding the moderation parts, rather than the specific models they are using. 
+Mike, Jackson, & Oltmanns (2014)  
+Weston & Jackson (2015?)  
+
+# Week 5: Personality Selection  
+This week’s personality, R, and stats topics are all ones that we’ve spoken about before. Now, we’ll just extend those a little further.  
+
+## Statistics  
+This week, our topic is logistic regression. We briefly talked about this last week with the Mike et al. paper. This week, I’ll demonstrate why that matters. 
+
+The .Rmd file associated this week will have the background and such that should be necessary for understanding logistic regression, so be sure to read that carefully and follow along.  
+
+## R Skills  
+This week, we’re going to keep working on our purrr skills. Try to do it to clean the longitudinal data set for this week. Refer to the Intro to Purrr link I sent last week as well as the .Rmd I sent for last week. There aren’t any really great resources, unfortunately, although see the attached cheatsheet (and just generally see this link of really useful R cheatsheets curated by RStudio).   
+
+## Readings  
+This week, we’re going to talk about selection effects. I mentioned these before in the context of my masters, and we touched on them last week when talking about personality predicting who volunteers after retirement. But this week, I want to unpack what’s different about this week, and the week where we talked about what personality predicts. The difference is that previously, we were interested in *whatever* personality predicts. Now we’re interested in the things that personality *prospectively* predicts. This requires that measurements of personality precede the outcomes they predict. So if I want to say that personality predicts who gets heart disease, I have to measure personality *before* you get heart disease. This requires longitudinal data, so it will be our first introduction to working with (and cleaning) longitudinal data.
+
+1. Weston & Jackson (2014) - this paper makes a nice point about personality predicting the *onset* of disease, which is a much more interesting question. 
+2. Lüdtke et al. (2011) - just skim this one. It’s a large scale investigation of selection effects in young adults. Think about why (or if) the effects they found make sense.
+
+# Week 6: Personality Development (Longitudinal)  
+This week is our introduction to longitudinal approaches.  
+
+The .Rmd file for this week will be very comprehensive, covering R techniques as well the stats side. Apologies in advance if parts of it seem discontinuous. I wrote it in fits and starts as I found a few hours to work here and there last week. This week, I’m not going to ask you to struggle through figuring out the code for working with these models. Doing so is actually extremely involved, and I’ve actually spent a fair amount of time writing helper functions that I’ve shared across the internet. Instead, I’m going to ask you to take time working through the document, making sure you understand both the code and the concepts. They’ll be pieces that will be useful for you in working with the data files.  
+
+## Statistics  
+Again, this week, we are going to talk about longitudinal models. Most of what you’ll need for the intro is in the .Rmd file.I’m also attaching a textbook that you can peruse. If you have time / are interesting, chapters 1-5 are a good place to start. The first couple of chapters, in particular, are good at motivating why we care about multilevel modeling much more than I do. The downside is that it isn’t built with a mind toward longitudinal models, so it gets somewhat more involved. So, I’d start with .Rmd file and then work your way back to the textbook if you want more. (We’ll get to covariates.& moderators next week).  
+ 
+## R Skills  
+At this point in the summer, I’ve introduced you to most of the techniques you need to be a successful R programmer. So rather than asking you to do a specific technique for this week, I’m going to ask you to each email me separately, letting me know what skills you feel weakest on and would like more practice with. I’ll follow up with each of you with some exercises you can do.  
+
+## Readings  
+I’m just going to assign two papers this week, which is a very dense meta-analysis (Roberts et al., 2006) looking at longitudinal personality development across the lifespan and the other is a short conceptual introduction to longitudinal research (Baldwin & Sobba, 2016). Also make sure to continue to refer back to the earlier conceptual / review paper on personality development.  
+
+Roberts et al. (2006)  
+Baldwin & Sobba (2016)  
+
+# Week 7: Personality Development Continued (Longitudinal)  
+This week, the topic is basically what’s beyond mean level change? The most interesting questions with this basically deal with what we can do explain mean level change. The way we do this is by adding additional predictors to the longitudinal models I introduced in the last lesson on longitudinal models.
+
+## Statistics  
+As with last week, the .Rmd file will be a comprehensive introduction to the statistical components of this week's lesson.  
+## R Skills  
+At this point, there are no real specific R skills I want to teach you. I more just want to help you hone the skills you already have.  
+
+## Readings  
+
+Beck (2018): Master's Thesis  
+Schwaba & Bleidorn (2018)  
+
+# Week 8: Personality Variability (to be implemented eventually)  
+
+## Statistics  
+## R Skills  
+## Readings  
