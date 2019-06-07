@@ -13,7 +13,8 @@ library(plyr)
 library(tidyverse)
 ```
 
-## Data
+## Data  
+First, we need to load in the data. In this case, we're going to load in 3 sets of data from the Big 5 from the SAPA project. Each of the data sets have the same participants. What differs is the number of items in the scale.  
 ### IPIP20
 ```{r}
 # load data
@@ -33,6 +34,10 @@ ipip100 <- read_csv("~/Dropbox (Brown)/Summer 2018/RA Files/Week 1 Scales/data/i
 ```
 
 # Inter-Item Correlations  
+When we create scales for a construct, we want the items to all be related to one another. This can be done using something called the inter-item correlation, which is what it sounds like the inter (between) item correlation. 
+
+Below, you see code for pulling out the Agreeableness items from the IPIP20 and saving them to an object called "a." Do the same for the other 4 of the Big 5. You'll also see code for taking the correlation between items in the Agreeableness scale. Do the same for the rest of the Big 5. Are the items related? Do you see anything strange?
+
 ## IPIP20
 ```{r}
 a <- ipip20 %>% select(contains("Agreeableness"))
@@ -41,7 +46,8 @@ a <- ipip20 %>% select(contains("Agreeableness"))
 ```
 
 
-## Reverse Coding
+## Reverse Coding  
+When we work with the relatedness of items in a scale, it's usually because we want to somehow combine them into a composite score (usually through a mean or a sum score). However, most scales will often have reverse coded items (e.g. "I am relaxed" being a negatively coded Neuroticism item). If we take the mean of those items, then it won't reflect the underlying construct. Thus, we "flip" the scale, such that a low rating of an item like "I am relaxed"
 ```{r}
 load("~/Dropbox (Brown)/Summer 2018/RA Files/Week 1 Scales/data/keys.RData")
 

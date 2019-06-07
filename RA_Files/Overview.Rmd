@@ -1,8 +1,16 @@
 ---
-title: "Untitled"
+title: "R and Stats for Personality"
 author: "Emorie Beck"
-date: "2/18/2019"
-output: html_document
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  html_document:
+    number_sections: no
+    theme: united
+    highlight: tango
+    df_print: paged
+    code_folding: hide
+    toc: true
+    toc_float: true
 ---
 
 ```{r setup, include=FALSE}
@@ -115,7 +123,8 @@ This week, we’re going to keep working on our purrr skills. Try to do it to cl
 ## Readings  
 This week, we’re going to talk about selection effects. I mentioned these before in the context of my masters, and we touched on them last week when talking about personality predicting who volunteers after retirement. But this week, I want to unpack what’s different about this week, and the week where we talked about what personality predicts. The difference is that previously, we were interested in *whatever* personality predicts. Now we’re interested in the things that personality *prospectively* predicts. This requires that measurements of personality precede the outcomes they predict. So if I want to say that personality predicts who gets heart disease, I have to measure personality *before* you get heart disease. This requires longitudinal data, so it will be our first introduction to working with (and cleaning) longitudinal data.
 
-1. Weston & Jackson (2014) - this paper makes a nice point about personality predicting the *onset* of disease, which is a much more interesting question. 
+1. Weston & Jackson (2014) - 
+this paper makes a nice point about personality predicting the *onset* of disease, which is a much more interesting question. 
 2. Lüdtke et al. (2011) - just skim this one. It’s a large scale investigation of selection effects in young adults. Think about why (or if) the effects they found make sense.
 
 # Week 6: Personality Development (Longitudinal)  
