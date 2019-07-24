@@ -34,6 +34,7 @@ library(tidyverse)
 This week, our data are going to come from the German Socioeconomic Panel Study (GSOEP). The GSOEP is a longitudinal study of adults in German housesholds. The study has a broad range of variables, but for our purposes we're just going to use personality ratings, age, life satisfaction, and gender from a single year (2005). In future weeks, we'll work to get additional variables across waves, which will be more involved, but this will get our feet wet with these data. 
 
 Like when we used the PAIRS data, we need a codebook. To create it, go to https://data.soep.de/soep-core# and use the search feature to find the variables you need or https://data.soep.de/soep-long/topics/ where you can scroll through topics (this may be easier for finding the personality variables). I've included a base codebook that should show you what you need to gather for each variable.  
+
 ```{r}
 wd <- "https://github.com/emoriebeck/R-tutorials/blob/master/RA_Files/Week_4_Moderation"
 dat.2005 <- haven::read_sav(url(sprintf("%s/vp.sav?raw=true", wd)))
