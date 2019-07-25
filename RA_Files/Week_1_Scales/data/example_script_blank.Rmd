@@ -83,6 +83,7 @@ a <- ipip20 %>% select(contains("Agreeableness"))
 Did you notice anything odd? If you remember from your reading, psychometricians often use items that capture the opposite of the construct under investigation to control for social desirability (sort of).  
 
 The code below will load in the keys (positive or negative) for each of the data sets (data frames called `ipip20_items`, `ipip50_items`, and `ipip100_items`). I demonstrate reverse coding for the ipip20 data set. Your challenge is to also do so for the ipip50 and ipip100.  
+
 ```{r}
 load("~/Dropbox (Brown)/Summer 2018/RA Files/Week 1 Scales/data/keys.RData")
 
@@ -95,6 +96,7 @@ Now that we've reverse coded the items, we can recalculate the correlations. The
 
 ## Back to IPIP20  
 Do the same we did above for the remaining Big 5 traits for the IPIP20. Then do so for the IPIP50 and IPIP100.  
+
 ```{r}
 a20 <- ipip20 %>% select(contains("Agreeableness"))
 
@@ -115,7 +117,8 @@ a20 <- ipip20 %>% select(contains("Agreeableness"))
 ## Average Inter-Item Correlations  
 Now that we've looked at individual item level correlations, the next step is to look at them on average, with the idea that items within a scale should have similar relationships to one another and be high on average.  
 
-Below, you see code to first remove the lower triangle of the correlation matrix and the diagonal to remove redundancy in the correlation matrix of Agreeableness (since correlation matrices are symmetric). Then you see code to take that matrix and calculate its mean.
+Below, you see code to first remove the lower triangle of the correlation matrix and the diagonal to remove redundancy in the correlation matrix of Agreeableness (since correlation matrices are symmetric). Then you see code to take that matrix and calculate its mean.  
+
 ### IPIP20
 ```{r}
 # turn lower part of the matrix to NA
@@ -137,6 +140,7 @@ mean(r_a20, na.rm = T)
 
 # Item-Total Correlations  
 Item-total correlations are what they sound like -- the correlation between a single item and a composite (mean) of all other items. Here, for simplicity, we're going to be a little lazy and correlate each item with a composite that includes itself. Because this artificially inflates the correlation, I'll later show you a way to get an estiamte that doesn't include this item.  
+
 ## Manual Method  
 
 ### IPIP20  
@@ -159,6 +163,7 @@ Item-total correlations are what they sound like -- the correlation between a si
 The `psych` package will give us a method for calculating item-total correlations that do not aritificially inflate the correlations. Below, you see the code for doing so using the `alpha()` function from the `psych` package. 
 
 Run the code below for Agreeablness, then repeat for the rest of the Big 5. Once you've done that, do the same for the ipip50 and ipip100.  
+
 ### IPIP20  
 ```{r}
 (a20_alpha <- psych::alpha(a20))
@@ -182,6 +187,7 @@ What do you notice about the correlations?
 Split-half methods are basically a way of testing whether items belong in a scale by looking at whether composites of arbitrary halves of the scale tend to be related to one another. If they are, then this suggests the items are likely to be very related to one another in general.  
 
 Below, you see code for correlating the first and second halves of the Agreeableness scale in the IPIP20. Do the same for the rest of the Big 5 then for the IPIP50 and IPIP100.  
+
 ## Manual Method  
 ### IPIP20  
 ```{r}

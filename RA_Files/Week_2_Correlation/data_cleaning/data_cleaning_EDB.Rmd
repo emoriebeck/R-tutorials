@@ -20,6 +20,9 @@ editor_options:
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+# Introduction  
+This week, we're going to talk about correlations in R. But just as importantly, we are going to get you started on perhaps the most important skill in psychological research -- working with data. Follow along below.  
+
 # Workspace
 First, we start by loading the packages and data we'll need.
 
