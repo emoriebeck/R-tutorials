@@ -18,6 +18,9 @@ output:
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+# Introduction  
+This week, we’ll work with multiple regression and learn about cross-sectional age differences in personality. This week will be foundational because it will lay the foundation, both theoretically and statistically, for what we’ll be doing the rest of the "course." For that reason, I’m about to throw a bunch of content at you.  
+
 # Workspace 
 
 ## Packages

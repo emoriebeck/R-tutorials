@@ -1,16 +1,27 @@
 ---
 title: "Data Cleaning"
 author: "Emorie Beck"
-date: "\today"
-output: html_document
+date: "`r Sys.setlocale('LC_TIME', 'C'); format(Sys.time(), '%d\\\\. %B %Y')`"
+output:
+  html_document:
+    theme: united
+    highlight: tango
+    df_print: paged
+    code_folding: show
+    toc: true
+    toc_float: true
+    toc_depth: 2
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
+# Introduction  
+This week, we're going to talk about correlations in R. But just as importantly, we are going to get you started on perhaps the most important skill in psychological research -- working with data. Follow along below.  
+
 # Workspace
-First, we start by loading the packages and data we'll need.
+First, we start by loading the packages and data we'll need. 
 
 ## Packages
 ```{r}
