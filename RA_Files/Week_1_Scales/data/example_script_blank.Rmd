@@ -50,20 +50,21 @@ First, we need to load in these data. We're going to use 3 data sets of differen
 
 ### IPIP20
 ```{r}
+wd <- "https://github.com/emoriebeck/R-tutorials/raw/master/RA_Files/Week_1_Scales"
 # load data
-ipip20 <- read_csv("~/Dropbox (Brown)/Summer 2018/RA Files/Week 1 Scales/data/ipip20.csv")
+ipip20 <- read_csv(sprintf("%s/data/ipip20.csv", wd))
 ```
 
 ### IPIP50  
 ```{r}
 # load data
-ipip50 <- read_csv("~/Dropbox (Brown)/Summer 2018/RA Files/Week 1 Scales/data/ipip50.csv")
+ipip50 <- read_csv(sprintf("%s/data/ipip50.csv", wd))
 ```
 
 ### IPIP100
 ```{r}
 # load data
-ipip100 <- read_csv("~/Dropbox (Brown)/Summer 2018/RA Files/Week 1 Scales/data/ipip100.csv")
+ipip100 <- read_csv(sprintf("%s/data/ipip100.csv", wd))
 ```
 
 # Inter-Item Correlations  
