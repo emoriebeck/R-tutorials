@@ -44,7 +44,14 @@ for(i in letters[1:5]){
 }
 ```
 
-You can also use it to read data files:
+In psychology, we deal with all sorts of weird sorts of data frames. From longitudinal data with separate files for each year to experimental data with separate data for each participant (if you're "lucky," you might even get both!), data are often stored as separate files. THe good news is that `for` loops are here to save you from:  
+
+<ol>
+<li>Writing code to load in each file separately (not good).</li>
+<li>Copying each data file into one larger data set in Excel (worse)</li>
+</ol>
+
+Assuming you have all the data in a single folder and the format is reasonably similar, you have the following basic syntax:  
 
 ```{r, eval = F}
 data_path <- ""
@@ -60,7 +67,7 @@ The loop above defines the path of the data, reads all the files in that path, c
 
 This is all well and good and would work just fine. But what happens if you have multiple data files for different subjects if, say, they complete a writing task and a memory task? Or maybe you work with longitudinal data, like I do, and frequently have multiple data files for a given year for different categories (e.g. health, psychological, etc.). In that case, the loop above might not work. The files might have different properties or be stored in different locations (for your own sanity).  
 
-```{r}
+```{r, eval = F}
 data_path <- ""
 directories <- list.files(data_path)
 files <- c("health", "person")
@@ -76,17 +83,37 @@ for(i in directories){
 
 In this case, it's a little more complicated. First, our method for loading each of the files into a list doesn't work nicely here because we are iterating through 2 variables. As a result, we have to save each file into an object called "tmp" that then must be joined with data from previous iterations. The downside of this is that we have to use a sort of "brute-force" method to do so, which is not ideal. Things go wrong with data collection quite often, meaning that files are likely to have different columns. Third, when a loop fails, it refuses to continue. And you are left with a couple of variables (i and k) and have to try to work backward to figure out what is going wrong.  
 
-Sound annoying? Enter purrr.  
+Sound annoying? Enter `purrr`.  
 
 #The purrr solution
-purrr is my favorite alternative to iteration. It keeps me organized by keeping everything together in a single object. It works nicely with functions like `possibly()` and `safely()` that catch and handle errors. 
+purrr is my favorite alternative to iteration. (There's also the whole `apply` family, which is definitely worth learning -- even I still use it -- but I find `purrr` to be much more useful in the long run.) `purrr` keeps me organized by keeping everything together in a single object. It works nicely with functions like `possibly()` and `safely()` that catch and handle errors. 
 
-purrr can be used for many more things than I will talk about here. If you want to know more, you can check out Hadley Wickham's R for Data Science or purrr documentation. I'm going to focus on how *I* I use purrr: reading data, cleaning, running models, making tables, and making plots.  
+`purrr` can be used for many more things than I will talk about here. If you want to know more, you can check out Hadley Wickham's [R for Data Science](https://r4ds.had.co.nz/) or `purrr` documentation. I'm going to focus on how *I* I use `purrr`: reading data, cleaning, running models, making tables, and making plots.  
+
+Here's some `purrr` syntax I won't explain now. It's set up to mirror the demonstration above. It will make way more sense soon, I promise: 
+
+```{r, eval = F}
+read_fun <- function(pid, dir){
+  sprintf("%s/%s/%s.csv", data_path, dir, pid) %>% read_csv
+}
+
+data_path <- ""
+file <- list.files(data_path)
+data <- tibble(file = file) %>%
+  mutate(file = str_remove_all(file, ".csv")) %>% 
+  separate(file, c("PID", "directory"), sep = "_") %>%
+  mutate(data = map2_df(PID, directory, read_fun)) %>% 
+  unnest(data, .drop = T)
+```
+
+Beyond "WTF", your initial response may be "this is not more efficient than the nested `for` loop you showed us above." You are partially correct. The rest of the tutorial will be showing you why being wrong now will sooooo right later!  
+
 
 ## Nested Data Frames
-Before we can learn how to use purrr, we need to understand what a nested data frame is. If you've ever worked with a list in R, you are halfway there. Basically a nested data frame takes the normal data frame you are probably familiar with and adds some new features. It still has columns, rows, and cells, but what makes up those cells isn't restrictred to numbers, strings, or logicals. Instead, you can put essentially anything you want: lists, models, data frames, plots, etc! 
+Before we can learn how to use `purrr`, we need to understand what a nested data frame is. If you've ever worked with a list in R, you are halfway there. Basically a nested data frame takes the normal data frame you are probably familiar with and adds some new features. It still has columns, rows, and cells, but what makes up those cells isn't restrictred to numbers, strings, or logicals. Instead, you can put essentially anything you want: lists, models, data frames, plots, etc! 
 
 If that freaks you out a bit, imagine this. Imagine you are me: you work with personality data and want to use each of the Big 5 to individually predict some outcomes, like health and life satisfaction. 
+
 
 ```{r}
 ipip50 <- read.csv("https://raw.githubusercontent.com/emoriebeck/R-tutorials/master/purrr/ipip50_sample.csv", stringsAsFactors = F)
@@ -103,23 +130,21 @@ The really bad solution would be to write the code to model these data, make a t
 
 A better solution would be a loop, where you use a nested loop to complete the steps for each trait-outcome pair. How you store these values can be a little wonky and often involes a bunch of different lists or a cluttered global environment with losts of objects.   
 
-But the best solution is purrr. What does this look like? Well, we start with a nested data frame. To do that, we need to make sure our data is ready. I've found that the easiest way to work with data with purrr is to first convert your data to long form, where we want to have columns for all the variable we would want to iterate through in a loop. To help you understand what that means and looks like, I think it's useful to start with a non-nested data frame created by the `expand.grid()` function. 
+But the best solution is purrr. What does this look like? Well, we start with a nested data frame. To do that, we need to make sure our data is ready. I've found that the easiest way to work with data with purrr is to first convert your data to long form, where we want to have columns for all the variable we would want to iterate through in a loop. To help you understand what that means and looks like, I think it's useful to start with a non-nested data frame created by the `crossing()` function from the `dplyr` package. 
 
-Basically, `expand.grid()`  takes what you give it and returns a data frame with all combinations of the variables. There is no limit to the number of columns this can have. Here, we feed it "Trait", which contains a vector of the Big 5, and "Outcome", which contains a vector of our outcomes, which results in a data frame with 2 columns and 10 rows. 
+Basically, `crossing()`  takes what you give it and returns a data frame with all combinations of the variables. There is no limit to the number of columns this can have. Here, we feed it "Trait", which contains a vector of the Big 5, and "Outcome", which contains a vector of our outcomes, which results in a data frame with 2 columns and 10 rows. 
 
 ```{r}
 (df <- expand.grid(
   Trait = c("E", "A", "C", "N", "O"),
-  Outcome = c("BMI", "logMedInc", "exer"),
-  stringsAsFactors = F
-) %>%
-  tbl_df)
+  Outcome = c("BMI", "logMedInc", "exer")
+)) 
 ```
 
 
-One cool thing this will allow us to do is to use consistent variable names in formulas and functions and to feed the correct data into different programs using the `dplyr` helper function `filter()`. You can use expand grid with purrr functions without nesting any data in the data frame (in fact, I do this a lot because I work with large data sets and lots of combinations), but I'm going to show you the nested data frame route in this case and refer you to my GitHub for when and how you would use the `expand.grid()` approach.
+One cool thing this will allow us to do is to use consistent variable names in formulas and functions and to feed the correct data into different programs using the `dplyr` helper function `filter()`. You can use expand grid with purrr functions without nesting any data in the data frame (in fact, I do this a lot because I work with large data sets and lots of combinations), but I'm going to show you the nested data frame route in this case and refer you to my GitHub for when and how you would use the `crossing()` approach.
 
-Back to nested data frames. We want to end up with a data frame that has the same columns as the `expand.grid()` data frame except that we want an additional column that holds the data for each trait-outcome pair. To do this, we need to have a column that indexes both trait and outcome. To get this, we change our data to the "tidy" format using `gather()` in the `tidyr` package.  
+Back to nested data frames. We want to end up with a data frame that has the same columns as the `crossing()` data frame except that we want an additional column that holds the data for each trait-outcome pair. To do this, we need to have a column that indexes both trait and outcome. To get this, we change our data to the "tidy" format using `gather()` in the `tidyr` package.  
 
 So let's take our Big 5 data and do that.
 
@@ -293,10 +318,9 @@ To do this, I'm also going to introduce something that is central to `purrr` pro
 
 ```{r}
 pred_fun <- function(mod){
-  expand.grid(
+  crossing(
     t.value = seq(1,7,.25)
   ) %>%
-    tbl_df %>%
     mutate(pred = predict(mod, newdata = .))
 }
 
