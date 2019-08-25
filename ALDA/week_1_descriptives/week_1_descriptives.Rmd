@@ -36,7 +36,7 @@ Packages seems like the most basic step, but it is actually very important. <str
 
 For this tutorial, we are going to quite simple. We will load the `psych` package for data descriptives, some options for cleaning and reverse coding, and some evaluations of our scales. The `plyr` package is the predecessor of the `dplyr` package, which is a core package of the `tidyverse`, which you will become quite familiar with in these tutorials. I like the plyr package because it contains a couple of functions (e.g. `mapvalues()`) that I find quite useful. Finally, we load the `tidyverse` package, which is actually a complilation of 8 packages. Some of these we will use today and some we will use in later tutorials. All are very useful and are arguably some of the most powerful tools R offers.  
 
-```{r}
+```{r packages}
 # load packages
 library(psych)
 library(plyr)
@@ -69,32 +69,49 @@ Here are additional columns that will make our lives easier or are applicable to
 12. *meta*: Some datasets have a meta name, which essentially means a name that variable has across all waves to make it clear which variables are the same. They are not always useful as some data sets have meta names but no great way of extracting variables using them. But they're still typically useful to include in your codebook regardless.  
 
 Below, I'll load in the codebook we will use for this study, which will include all of the above columns. 
-```{r}
-wd <- "https://github.com/emoriebeck/R-tutorials/blob/master/RA_Files/Week_7_Growth_Models_II"
-codebook <- sprintf("%s/codebook.xlsx?raw=true", wd) %>% read_csv(.)
+```{r codebook}
+# set the path
+wd <- "https://github.com/emoriebeck/R-tutorials/blob/master/ALDA/week_1_descriptives"
+
+# load the codebook
+(codebook <- url(sprintf("%s/codebook.csv?raw=true", wd)) %>% 
+    read_csv(.) %>%
+    mutate(old_name = str_to_lower(old_name)))
 ```
 
 
 ## Data
 
-First, we need to load in these data. We're going to use 3 data sets of different size to demonstrate some of these concepts. The items come from the International Personality Item Pool (IPIP) and are subset of responses from the [SAPA Project](https://sapa-project.org/).  
+First, we need to load in the data. We're going to use three waves of data from the German Socioeconomic Panel Study, which is a longitudinal study of German households that has been conducted since 1984. We're going to use more recent data from three waves of personality data collected between 2005 and 2013.  
 
-### IPIP20
-```{r}
-# load data
-ipip20 <- read_csv("~/Dropbox (Brown)/Summer 2018/RA Files/Week 1 Scales/data/ipip20.csv")
+*Note*: we will be using the teaching set of the GSOEP data set. I will not be pulling from the raw files as a result of this. I will also not be mirroring the format that you would usually load the GSOEP from because that is slightly more complicated and somethng we will return to in a later tutorial after we have more skills. I've left that code for now, but it won't make a lot of sense right now.  
+
+```{r data set up, eval = F}
+path <- "~/Box/network/other projects/PCLE Replication/data/sav_files"
+ref <- sprintf("%s/cirdef.sav", path) %>% haven::read_sav(.) %>% select(hhnr, rgroup20)
+read_fun <- function(Year){
+  vars <- (codebook %>% filter(year == Year | year == 0))$old_name
+  set <- (codebook %>% filter(year == Year))$dataset[1]
+  sprintf("%s/%s.sav", path, set) %>% haven::read_sav(.) %>%
+    full_join(ref) %>%
+    filter(rgroup20 > 10) %>%
+    select(vars) 
+}
+
+tibble(year = c(2005:2015)) %>%
+  mutate(data = map(year, read_fun)) %>%
+  unnest(data) %>%
+  write.csv(., file = "~/Documents/Github/R-tutorials/ALDA/week_1_descriptives/week_1_data.csv", row.names = F)
 ```
 
-### IPIP50  
 ```{r}
-# load data
-ipip50 <- read_csv("~/Dropbox (Brown)/Summer 2018/RA Files/Week 1 Scales/data/ipip50.csv")
-```
+old.names <- codebook$old_name # get old column names
+new.names <- codebook$new_name # get new column names
 
-### IPIP100
-```{r}
-# load data
-ipip100 <- read_csv("~/Dropbox (Brown)/Summer 2018/RA Files/Week 1 Scales/data/ipip100.csv")
+(soep <- sprintf("%s/data/week_1_data.csv", wd) %>% # path to data
+  read_csv %>% # read in data
+  select(old.names) %>% # select the columns from our codebook
+  setNames(new.names)) # rename columns with our new names
 ```
 
 # Inter-Item Correlations  
