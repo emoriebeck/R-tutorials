@@ -1,0 +1,435 @@
+---
+title: "Data Descriptives and Management"
+author: "Emorie D Beck"
+date: "`r Sys.setlocale('LC_TIME', 'C'); format(Sys.time(), '%d\\\\. %B %Y')`"
+output:
+  html_document:
+    theme: united
+    highlight: tango
+    df_print: paged
+    code_folding: show
+    toc: true
+    toc_float: true
+    toc_depth: 2
+editor_options: 
+  chunk_output_type: console
+---
+
+# What Are Data?  
+Data are the core of everything that we do in statistical analysis. Data come in many forms, and I don't just mean `.csv`, `.xls`, `.sav`, etc. Data can be wide, long, documented, fragmented, messy, and about anything else that you can imagine. 
+
+Although data could arguably be more means than end in psychology, the importance of understanding the structure and format of your data cannot overstated. Failure to understand your data could end in improper techniques and flagrantly wrong inferences at worst.
+
+In this tutorial, we are going to talk data management and basic data cleaning. Other tutorials will go more in depth into data cleaning and reshaping. This tutorial is meant to prepare you to think about those in more nuanced ways and to help you develop a functional workflow for conducting your own research.  
+
+# Workspace  
+When I create an `rmarkdown` document for my own research projects, I always start by setting up my my workspace. This involves 3 steps:  
+
+1. Packages  
+2. Codebook(s)  
+3. Data  
+
+Below, we will step through each of these separately, setting ourselves up to (hopefully) flawlessly communicate with `R` and our data. 
+
+## Packages  
+Packages seems like the most basic step, but it is actually very important. <strong>ALWAYS LOAD YOUR PACKAGES IN A VERY INTENTIONAL ORDER AT THE BEGINNING OF YOUR SCRIPT.</strong> Package conflicts suck, so it needs to be shouted.  
+
+For this tutorial, we are going to quite simple. We will load the `psych` package for data descriptives, some options for cleaning and reverse coding, and some evaluations of our scales. The `plyr` package is the predecessor of the `dplyr` package, which is a core package of the `tidyverse`, which you will become quite familiar with in these tutorials. I like the plyr package because it contains a couple of functions (e.g. `mapvalues()`) that I find quite useful. Finally, we load the `tidyverse` package, which is actually a complilation of 8 packages. Some of these we will use today and some we will use in later tutorials. All are very useful and are arguably some of the most powerful tools R offers.  
+
+```{r}
+# load packages
+library(psych)
+library(plyr)
+library(tidyverse)
+```
+
+## Codebook  
+The second step is a codebook. Arguably, this is the first step because you should *create* the codebook long before you open `R` and load your data. 
+
+In this case, we are going to using some data from the [SAPA Project](https://sapa-project.org/), which is an open source data set collected at Northwestern by Bill Revelle and David Condon. SAPA is massively missing at random, with  > 80\% missingness. However, by collecting thousands (or in this case hundreds of thousands) of participants, the covariance matrix stabilizes and analyses can be conducted on the covariance matrix or multiple imputation can be used on missing values.  
+
+For this tutorial, I created the codebook for you, and included what I believe are the core columns you may need. Some of these columns will not be particularly helpful for this dataset. For example, the SAPA dataset is a single .RData file, while many of you likely work with datasets that are spread across many files. As a result, the "dataset" column of the codebook will have a single value ("SAPA").  
+
+Here are my core columns that are based on the original data:  
+1. *dataset*: this column indexes the **name** of the dataset that you will be pulling the data from. This is important because we will use this info later on (see `purrr` tutorial) to load and clean specific data files. Even if you don't have multiple data sets, I believe consistency is more important and suggest using this.  
+2. *old_name*: this column is the name of the variable in the data you are pulling it from. This should be exact. The goal of this column is that it will allow us to `select()` variables from the original data file and rename them something that is more useful to us.  
+3. *item_text*: this column is the original text that participants saw or a description of the item.  
+4. *scale*: this column tells you what the scale of the variable is. Is it a numeric variable, a text variable, etc. This is helpful for knowing the plausible range. 
+5. *reverse*: this column tells you whether items in a scale need to be reverse coded. I recommend coding this as 1 (leave alone) and -1 (reverse) for reasons that will become clear later.  
+6. *mini*: this column represents the minimum value of scales that are numeric. Leave blank otherwise.  
+7. *maxi*: this column represents the maximumv alue of scales that are numeric. Leave blank otherwise.  
+8. *recode*: sometimes, we want to recode variables for analyses (e.g. for categorical variables with many levels where sample sizes for some levels are too small to actually do anything with it). I use this column to note the kind of recoding I'll do to a variable for transparency.
+
+Here are additional columns that will make our lives easier or are applicable to some but not all data sets: 
+8. *category*: broad categories that different variables can be put into. I'm a fan of naming them things like "outcome", "predictor", "moderator", "demographic", "procedural", etc. but sometimes use more descriptive labels like "Big 5" to indicate the model from which the measures are derived.  
+9. *label*: label is basically one level lower than category. So if the category is Big 5, the label would be, or example, "A" for Agreeableness, "SWB" for subjective well-being, etc. This column is most important and useful when you have multiple items in a scales, so I'll typically leave this blank when something is a standalone variable (e.g. sex, single-item scales, etc.).  
+10. *item_name*: This is the lowest level and most descriptive variable. It indicates which item in scale something is. So it may be "kind" for Agreebleness or "sex" for the demographic biological sex variable.  
+11. *year*: for longitudinal data, we have several waves of data and the name of the same item across waves is often different, so it's important to note to which wave an item belongs. You can do this by noting the wave (e.g. 1, 2, 3), but I prefer the actual year the data were collected (e.g. 2005, 2009, etc.)  
+11. *new_name*: This is a column that brings together much of the information we've already collected. It's purpose is to be the new name that we will give to the variable that is more useful and descriptive to us. This is a constructed variable that brings together others. I like to make it a combination of "category", "label", "item_name", and year using varying combos of "_" and "." that we can use later with tidyverse functions. I typically construct this variable in Excel using the `CONCATENATE()` function, but it could also be done in `R`. The reason I do it in Excel is that it makes it easier for someone who may be reviewing my codebook.  
+12. *meta*: Some datasets have a meta name, which essentially means a name that variable has across all waves to make it clear which variables are the same. They are not always useful as some data sets have meta names but no great way of extracting variables using them. But they're still typically useful to include in your codebook regardless.  
+
+Below, I'll load in the codebook we will use for this study, which will include all of the above columns. 
+```{r}
+wd <- "https://github.com/emoriebeck/R-tutorials/blob/master/RA_Files/Week_7_Growth_Models_II"
+codebook <- sprintf("%s/codebook.xlsx?raw=true", wd) %>% read_csv(.)
+```
+
+
+## Data
+
+First, we need to load in these data. We're going to use 3 data sets of different size to demonstrate some of these concepts. The items come from the International Personality Item Pool (IPIP) and are subset of responses from the [SAPA Project](https://sapa-project.org/).  
+
+### IPIP20
+```{r}
+# load data
+ipip20 <- read_csv("~/Dropbox (Brown)/Summer 2018/RA Files/Week 1 Scales/data/ipip20.csv")
+```
+
+### IPIP50  
+```{r}
+# load data
+ipip50 <- read_csv("~/Dropbox (Brown)/Summer 2018/RA Files/Week 1 Scales/data/ipip50.csv")
+```
+
+### IPIP100
+```{r}
+# load data
+ipip100 <- read_csv("~/Dropbox (Brown)/Summer 2018/RA Files/Week 1 Scales/data/ipip100.csv")
+```
+
+# Inter-Item Correlations  
+The idea of inter-item correlations involves 2 concepts, coherence and differentiation. Items in the same scale should be related to one another and not related to items in other scales. To test this, we will use the `cor()` function  in R to calculate the correlation matrix of items in a scale.
+
+Below, I've added code to do pull out the itmes from the Agreeableness scale then to use that to calculate the correlations among those items. Run the code below and look at the results. Then do so for Extraversion, Conscientiousness, EmotionalStability, and Intellect.  
+
+## IPIP20
+```{r}
+a <- ipip20 %>% select(contains("Agreeableness"))
+c <- ipip20 %>% select(contains("Conscientiousness"))
+e <- ipip20 %>% select(contains("Extraversion"))
+n <- ipip20 %>% select(contains("EmotionalStability"))
+o <- ipip20 %>% select(contains("Intellect"))
+
+(r_a <- cor(a, use = "pairwise"))
+(r_c <- cor(c, use = "pairwise"))
+(r_e <- cor(e, use = "pairwise"))
+(r_n <- cor(n, use = "pairwise"))
+(r_o <- cor(o, use = "pairwise"))
+```
+
+
+## Reverse Coding
+Did you notice anything odd? If you remember from your reading, psychometricians often use items that capture the opposite of the construct under investigation to control for social desirability (sort of).  
+
+The code below will load in the keys (positive or negative) for each of the data sets (data frames called `ipip20_items`, `ipip50_items`, and `ipip100_items`). I demonstrate reverse coding for the ipip20 data set. Your challenge is to also do so for the ipip50 and ipip100.  
+
+```{r}
+load("~/Dropbox (Brown)/Summer 2018/RA Files/Week 1 Scales/data/keys.RData")
+
+keys20 <- ipip20_items$rev_code
+keys50 <- ipip50_items$rev_code
+keys100 <- ipip100_items$rev_code
+
+ipip20[5:24] <- reverse.code(ipip20[5:24], keys = keys20)
+ipip50[5:54] <- reverse.code(ipip50[5:54], keys = keys50)
+ipip100[5:104] <- reverse.code(ipip100[5:104], keys = keys100)
+```
+
+Now that we've reverse coded the items, we can recalculate the correlations. They should make more sense now.  
+
+## Back to IPIP20  
+Do the same we did above for the remaining Big 5 traits for the IPIP20. Then do so for the IPIP50 and IPIP100.  
+
+```{r}
+a20 <- ipip20 %>% select(contains("Agreeableness"))
+c20 <- ipip20 %>% select(contains("Conscientiousness"))
+e20 <- ipip20 %>% select(contains("Extraversion"))
+n20 <- ipip20 %>% select(contains("EmotionalStability"))
+o20 <- ipip20 %>% select(contains("Intellect"))
+
+(r_a20 <- cor(a20, use = "pairwise"))
+(r_c20 <- cor(c20, use = "pairwise"))
+(r_e20 <- cor(e20, use = "pairwise"))
+(r_n20 <- cor(n20, use = "pairwise"))
+(r_o20 <- cor(o20, use = "pairwise"))
+```
+
+## IPIP50
+```{r}
+a50 <- ipip50 %>% select(contains("Agreeableness"))
+c50 <- ipip50 %>% select(contains("Conscientiousness"))
+e50 <- ipip50 %>% select(contains("Extraversion"))
+n50 <- ipip50 %>% select(contains("EmotionalStability"))
+o50 <- ipip50 %>% select(contains("Intellect"))
+
+(r_a50 <- cor(a50, use = "pairwise"))
+(r_c50 <- cor(c50, use = "pairwise"))
+(r_e50 <- cor(e50, use = "pairwise"))
+(r_n50 <- cor(n50, use = "pairwise"))
+(r_o50 <- cor(o50, use = "pairwise"))
+```
+
+## IPIP100
+```{r}
+a100 <- ipip100 %>% select(contains("Agreeableness"))
+c100 <- ipip100 %>% select(contains("Conscientiousness"))
+e100 <- ipip100 %>% select(contains("Extraversion"))
+n100 <- ipip100 %>% select(contains("EmotionalStability"))
+o100 <- ipip100 %>% select(contains("Intellect"))
+
+(r_a100 <- cor(a100, use = "pairwise"))
+(r_c100 <- cor(c100, use = "pairwise"))
+(r_e100 <- cor(e100, use = "pairwise"))
+(r_n100 <- cor(n100, use = "pairwise"))
+(r_o100 <- cor(o100, use = "pairwise"))
+```
+
+
+## Average Inter-Item Correlations  
+Now that we've looked at individual item level correlations, the next step is to look at them on average, with the idea that items within a scale should have similar relationships to one another and be high on average.  
+
+Below, you see code to first remove the lower triangle of the correlation matrix and the diagonal to remove redundancy in the correlation matrix of Agreeableness (since correlation matrices are symmetric). Then you see code to take that matrix and calculate its mean.  
+
+
+```{r}
+r_a20[lower.tri(r_a20, diag = T)] <- NA
+r_c20[lower.tri(r_c20, diag = T)] <- NA
+r_e20[lower.tri(r_e20, diag = T)] <- NA
+r_n20[lower.tri(r_n20, diag = T)] <- NA
+r_o20[lower.tri(r_o20, diag = T)] <- NA
+
+mean(r_a20, na.rm = T)
+mean(r_c20, na.rm = T)
+mean(r_e20, na.rm = T)
+mean(r_n20, na.rm = T)
+mean(r_o20, na.rm = T)
+```
+
+```{r}
+r_a50[lower.tri(r_a50, diag = T)] <- NA
+r_c50[lower.tri(r_c50, diag = T)] <- NA
+r_e50[lower.tri(r_e50, diag = T)] <- NA
+r_n50[lower.tri(r_n50, diag = T)] <- NA
+r_o50[lower.tri(r_o50, diag = T)] <- NA
+
+mean(r_a50, na.rm = T)
+mean(r_c50, na.rm = T)
+mean(r_e50, na.rm = T)
+mean(r_n50, na.rm = T)
+mean(r_o50, na.rm = T)
+```
+
+```{r}
+r_a100[lower.tri(r_a100, diag = T)] <- NA
+r_c100[lower.tri(r_c100, diag = T)] <- NA
+r_e100[lower.tri(r_e100, diag = T)] <- NA
+r_n100[lower.tri(r_n100, diag = T)] <- NA
+r_o100[lower.tri(r_o100, diag = T)] <- NA
+
+mean(r_a100, na.rm = T)
+mean(r_c100, na.rm = T)
+mean(r_e100, na.rm = T)
+mean(r_n100, na.rm = T)
+mean(r_o100, na.rm = T)
+```
+
+# Item-Total Correlations  
+Item-total correlations are what they sound like -- the correlation between a single item and a composite (mean) of all other items. Here, for simplicity, we're going to be a little lazy and correlate each item with a composite that includes itself. Because this artificially inflates the correlation, I'll later show you a way to get an estiamte that doesn't include this item.  
+
+## Manual Method  
+
+### IPIP20  
+```{r}
+(a20_itr <- cor(a20, rowMeans(a20, na.rm = T), use = "pairwise"))
+(c20_itr <- cor(c20, rowMeans(c20, na.rm = T), use = "pairwise"))
+(e20_itr <- cor(e20, rowMeans(e20, na.rm = T), use = "pairwise"))
+(n20_itr <- cor(n20, rowMeans(n20, na.rm = T), use = "pairwise"))
+(o20_itr <- cor(o20, rowMeans(o20, na.rm = T), use = "pairwise"))
+
+mean(a20_itr)
+mean(c20_itr)
+mean(e20_itr)
+mean(n20_itr)
+mean(o20_itr)
+```
+
+### IPIP50  
+```{r}
+(a50_itr <- cor(a50, rowMeans(a50, na.rm = T), use = "pairwise"))
+(c50_itr <- cor(c50, rowMeans(c50, na.rm = T), use = "pairwise"))
+(e50_itr <- cor(e50, rowMeans(e50, na.rm = T), use = "pairwise"))
+(n50_itr <- cor(n50, rowMeans(n50, na.rm = T), use = "pairwise"))
+(o50_itr <- cor(o50, rowMeans(o50, na.rm = T), use = "pairwise"))
+
+mean(a50_itr)
+mean(c50_itr)
+mean(e50_itr)
+mean(n50_itr)
+mean(o50_itr)
+```
+
+### IPIP100  
+```{r}
+(a100_itr <- cor(a100, rowMeans(a100, na.rm = T), use = "pairwise"))
+(c100_itr <- cor(c100, rowMeans(c100, na.rm = T), use = "pairwise"))
+(e100_itr <- cor(e100, rowMeans(e100, na.rm = T), use = "pairwise"))
+(n100_itr <- cor(n100, rowMeans(n100, na.rm = T), use = "pairwise"))
+(o100_itr <- cor(o100, rowMeans(o100, na.rm = T), use = "pairwise"))
+
+mean(a100_itr)
+mean(c100_itr)
+mean(e100_itr)
+mean(n100_itr)
+mean(o100_itr)
+```
+
+## `psych` package  
+The `psych` package will give us a method for calculating item-total correlations that do not aritificially inflate the correlations. Below, you see the code for doing so using the `alpha()` function from the `psych` package. 
+
+Run the code below for Agreeablness, then repeat for the rest of the Big 5. Once you've done that, do the same for the ipip50 and ipip100.  
+
+### IPIP20  
+```{r}
+(a20_alpha <- psych::alpha(a20))
+(c20_alpha <- psych::alpha(c20))
+(e20_alpha <- psych::alpha(e20))
+(n20_alpha <- psych::alpha(n20))
+(o20_alpha <- psych::alpha(o20))
+
+a20_alpha$item.stats
+c20_alpha$item.stats
+e20_alpha$item.stats
+n20_alpha$item.stats
+o20_alpha$item.stats
+```
+
+### IPIP50  
+```{r}
+(a50_alpha <- psych::alpha(a50))
+(c50_alpha <- psych::alpha(c50))
+(e50_alpha <- psych::alpha(e50))
+(n50_alpha <- psych::alpha(n50))
+(o50_alpha <- psych::alpha(o50))
+
+a50_alpha$item.stats
+c50_alpha$item.stats
+e50_alpha$item.stats
+n50_alpha$item.stats
+o50_alpha$item.stats
+```
+
+### IPIP100  
+```{r}
+(a100_alpha <- psych::alpha(a100))
+(c100_alpha <- psych::alpha(c100))
+(e100_alpha <- psych::alpha(e100))
+(n100_alpha <- psych::alpha(n100))
+(o100_alpha <- psych::alpha(o100))
+
+a100_alpha$item.stats
+c100_alpha$item.stats
+e100_alpha$item.stats
+n100_alpha$item.stats
+o100_alpha$item.stats
+```
+
+What do you notice about the correlations?
+
+# Split-Half Reliability  
+Split-half methods are basically a way of testing whether items belong in a scale by looking at whether composites of arbitrary halves of the scale tend to be related to one another. If they are, then this suggests the items are likely to be very related to one another in general.  
+
+Below, you see code for correlating the first and second halves of the Agreeableness scale in the IPIP20. Do the same for the rest of the Big 5 then for the IPIP50 and IPIP100.  
+
+## Manual Method  
+### IPIP20  
+```{r}
+cor(rowMeans(a20[,1:2]), rowMeans(a20[,3:4]))
+cor(rowMeans(c20[,1:2]), rowMeans(c20[,3:4]))
+cor(rowMeans(e20[,1:2]), rowMeans(e20[,3:4]))
+cor(rowMeans(n20[,1:2]), rowMeans(n20[,3:4]))
+cor(rowMeans(o20[,1:2]), rowMeans(o20[,3:4]))
+```
+
+### IPIP50  
+```{r}
+cor(rowMeans(a50[,1:5]), rowMeans(a50[,6:10]))
+cor(rowMeans(c50[,1:5]), rowMeans(c50[,6:10]))
+cor(rowMeans(e50[,1:5]), rowMeans(e50[,6:10]))
+cor(rowMeans(n50[,1:5]), rowMeans(n50[,6:10]))
+cor(rowMeans(o50[,1:5]), rowMeans(o50[,6:10]))
+```
+
+### IPIP100   
+```{r}
+cor(rowMeans(a100[,1:10]), rowMeans(a100[,11:10]))
+cor(rowMeans(c100[,1:10]), rowMeans(c100[,11:10]))
+cor(rowMeans(e100[,1:10]), rowMeans(e100[,11:10]))
+cor(rowMeans(n100[,1:10]), rowMeans(n100[,11:10]))
+cor(rowMeans(o100[,1:10]), rowMeans(o100[,11:10]))
+```
+
+Can you think of any reasons why splitting a scale into first and second halves of the scale could be an issue? Can you think of a solution?  
+
+## `psych` package  
+The `psych` pacakge has another helpful function, called `splithalf()` that doesn't just choose one arbitrary split of the scale. Instead, it tests all possible splits and gives you the average estimate, which is a more robust estimate.
+
+Below, you see the code for calculating the split-half correlation between items in the Agreeableness scale. Do the same for the rest of the Big 5, then the same for the IPIP50 and IPIP100.  
+
+### IPIP20  
+```{r}
+splitHalf(a20)
+splitHalf(c20)
+splitHalf(e20)
+splitHalf(n20)
+splitHalf(o20)
+```
+
+### IPIP50  
+```{r}
+splitHalf(a50)
+splitHalf(c50)
+splitHalf(e50)
+splitHalf(n50)
+splitHalf(o50)
+```
+
+### IPIP100  
+```{r}
+splitHalf(a100)
+splitHalf(c100)
+splitHalf(e100)
+splitHalf(n100)
+splitHalf(o100)
+```
+
+# Cronbach's alpha  
+Finally, the most popular test of internal consistency of a scale is Cronbach's alpha. Basically, what this does is is extend the Spearman Brown prophecy formula, which relies on the split-half correlation to capture all possible split halves.  
+
+The alpha function already calculates this for us, so below, you see code to access that from the results of that function call. Access this for the rest of the Big 5 for the IPIP20, then for the IPIP50 and IPIP100.  
+
+```{r}
+a20_alpha$total
+c20_alpha$total
+e20_alpha$total
+n20_alpha$total
+o20_alpha$total
+```
+
+```{r}
+a50_alpha$total
+c50_alpha$total
+e50_alpha$total
+n50_alpha$total
+o50_alpha$total
+```
+
+```{r}
+a100_alpha$total
+c100_alpha$total
+e100_alpha$total
+n100_alpha$total
+o100_alpha$total
+```
+
+# Scale Development  
+
