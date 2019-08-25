@@ -100,19 +100,37 @@ read_fun <- function(Year){
 
 tibble(year = c(2005:2015)) %>%
   mutate(data = map(year, read_fun)) %>%
+  select(-year) %>% 
   unnest(data) %>%
-  write.csv(., file = "~/Documents/Github/R-tutorials/ALDA/week_1_descriptives/week_1_data.csv", row.names = F)
+  write.csv(., file = "~/Documents/Github/R-tutorials/ALDA/week_1_descriptives/data/wdeek_1_data.csv", row.names = F)
 ```
 
 ```{r}
 old.names <- codebook$old_name # get old column names
 new.names <- codebook$new_name # get new column names
 
-(soep <- sprintf("%s/data/week_1_data.csv", wd) %>% # path to data
-  read_csv %>% # read in data
+(soep <- url(sprintf("%s/data/week_1_data.csv?raw=true", wd)) %>% # path to data
+  read_csv(.) %>% # read in data
   select(old.names) %>% # select the columns from our codebook
   setNames(new.names)) # rename columns with our new names
 ```
+
+# Clean Data  
+## Reverse-Scoring  
+```{r}
+
+```
+
+## Create Composites   
+
+## Recode Variables  
+
+# Descriptives  
+
+## Scale Reliability  
+
+## Zero-Order Correlations
+
 
 # Inter-Item Correlations  
 The idea of inter-item correlations involves 2 concepts, coherence and differentiation. Items in the same scale should be related to one another and not related to items in other scales. To test this, we will use the `cor()` function  in R to calculate the correlation matrix of items in a scale.
