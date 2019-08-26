@@ -233,4 +233,42 @@ alpha_fun <- function(df){
 ## Zero-Order Correlations
 Finally, we often want to look at the zero-order correlation among study variables to make sure they are performing as we think they should. 
 
+To run the correlations, we will need to have our data in wide format, so we're going to do a little bit of reshaping before we do. 
+
+```{r}
+b5_soep_long %>%
+  unite(tmp, item, year, sep = "_") %>%
+  spread(key = tmp, value = value) %>% 
+  select(-Procedural__SID) %>%
+  cor(., use = "pairwise") %>%
+  round(., 2)
+```
+
+This is a lot of values and a little hard to make sense of, so as a bonus, I'm going to give you a little bit of more complex code that makes this more readable (and publishable ).  
+
+```{r, fig.cap="Correlations among Personality Indicators. Values on the diagonal represent Chronbach's alpha for each scale in each year. Within-trait correlations represent test-retest correlations."}
+r <- b5_soep_long %>%
+  unite(tmp, item, year, sep = "_") %>%
+  spread(key = tmp, value = value) %>% 
+  select(-Procedural__SID, -DOB, -Sex) %>%
+  cor(., use = "pairwise") 
+
+r[upper.tri(r, diag = T)] <- NA
+diag(r) <- (alphas %>% arrange(item, year))$std.alpha
+
+r %>% data.frame %>%
+  rownames_to_column("V1") %>%
+  gather(key = V2, value = r, na.rm = T, -V1) %>%
+  separate(V1, c("T1", "Year1"), sep = "_") %>%
+  separate(V2, c("T2", "Year2"), sep = "_") %>%
+  mutate_at(vars(Year1), ~factor(., levels = c(2013, 2009, 2005))) %>%
+  ggplot(aes(x = Year2, y = Year1, fill = r)) +
+    geom_raster() + 
+  scale_fill_gradient2(low = "blue", high = "red", mid = "white", 
+   midpoint = 0, limit = c(-1,1), space = "Lab", 
+   name="Correlations") +  
+  geom_text(aes(label = round(r,2))) +
+    facet_grid(T1 ~ T2) +
+    theme_classic()
+```
 
