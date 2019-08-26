@@ -1,5 +1,6 @@
 ---
 title: "Data Descriptives and Management"
+subtitle: "Applied Longitudinal Data Analysis"
 author: "Emorie D Beck"
 date: "`r Sys.setlocale('LC_TIME', 'C'); format(Sys.time(), '%d\\\\. %B %Y')`"
 output:
@@ -46,27 +47,27 @@ library(tidyverse)
 ## Codebook  
 The second step is a codebook. Arguably, this is the first step because you should *create* the codebook long before you open `R` and load your data. 
 
-In this case, we are going to using some data from the [SAPA Project](https://sapa-project.org/), which is an open source data set collected at Northwestern by Bill Revelle and David Condon. SAPA is massively missing at random, with  > 80\% missingness. However, by collecting thousands (or in this case hundreds of thousands) of participants, the covariance matrix stabilizes and analyses can be conducted on the covariance matrix or multiple imputation can be used on missing values.  
+In this case, we are going to using some data from the [German Socioeconomic Panel Study (GSOEP)](https://www.diw.de/en/soep/), which is an ongoing Panel Study in Germany. Note that these data are for teaching purposes only, shared under the license for the Comprehensive SOEP teaching dataset, which I, as a contracted SOEP user, can use for teaching purposes. These data represent select cases from  the full data set and should not be used for the purpose of publication. The full data are available for free at https://www.diw.de/en/diw_02.c.222829.en/access_and_ordering.html.   
 
 For this tutorial, I created the codebook for you, and included what I believe are the core columns you may need. Some of these columns will not be particularly helpful for this dataset. For example, the SAPA dataset is a single .RData file, while many of you likely work with datasets that are spread across many files. As a result, the "dataset" column of the codebook will have a single value ("SAPA").  
 
 Here are my core columns that are based on the original data:  
-1. *dataset*: this column indexes the **name** of the dataset that you will be pulling the data from. This is important because we will use this info later on (see `purrr` tutorial) to load and clean specific data files. Even if you don't have multiple data sets, I believe consistency is more important and suggest using this.  
-2. *old_name*: this column is the name of the variable in the data you are pulling it from. This should be exact. The goal of this column is that it will allow us to `select()` variables from the original data file and rename them something that is more useful to us.  
-3. *item_text*: this column is the original text that participants saw or a description of the item.  
-4. *scale*: this column tells you what the scale of the variable is. Is it a numeric variable, a text variable, etc. This is helpful for knowing the plausible range. 
-5. *reverse*: this column tells you whether items in a scale need to be reverse coded. I recommend coding this as 1 (leave alone) and -1 (reverse) for reasons that will become clear later.  
-6. *mini*: this column represents the minimum value of scales that are numeric. Leave blank otherwise.  
-7. *maxi*: this column represents the maximumv alue of scales that are numeric. Leave blank otherwise.  
-8. *recode*: sometimes, we want to recode variables for analyses (e.g. for categorical variables with many levels where sample sizes for some levels are too small to actually do anything with it). I use this column to note the kind of recoding I'll do to a variable for transparency.
+1. **dataset**: this column indexes the **name** of the dataset that you will be pulling the data from. This is important because we will use this info later on (see `purrr` tutorial) to load and clean specific data files. Even if you don't have multiple data sets, I believe consistency is more important and suggest using this.  
+2. **old_name**: this column is the name of the variable in the data you are pulling it from. This should be exact. The goal of this column is that it will allow us to `select()` variables from the original data file and rename them something that is more useful to us.  
+3. **item_text**: this column is the original text that participants saw or a description of the item.  
+4. **scale**: this column tells you what the scale of the variable is. Is it a numeric variable, a text variable, etc. This is helpful for knowing the plausible range. 
+5. **reverse**: this column tells you whether items in a scale need to be reverse coded. I recommend coding this as 1 (leave alone) and -1 (reverse) for reasons that will become clear later.  
+6. **mini**: this column represents the minimum value of scales that are numeric. Leave blank otherwise.  
+7. **maxi**: this column represents the maximumv alue of scales that are numeric. Leave blank otherwise.  
+8. **recode**: sometimes, we want to recode variables for analyses (e.g. for categorical variables with many levels where sample sizes for some levels are too small to actually do anything with it). I use this column to note the kind of recoding I'll do to a variable for transparency.
 
-Here are additional columns that will make our lives easier or are applicable to some but not all data sets: 
-8. *category*: broad categories that different variables can be put into. I'm a fan of naming them things like "outcome", "predictor", "moderator", "demographic", "procedural", etc. but sometimes use more descriptive labels like "Big 5" to indicate the model from which the measures are derived.  
-9. *label*: label is basically one level lower than category. So if the category is Big 5, the label would be, or example, "A" for Agreeableness, "SWB" for subjective well-being, etc. This column is most important and useful when you have multiple items in a scales, so I'll typically leave this blank when something is a standalone variable (e.g. sex, single-item scales, etc.).  
-10. *item_name*: This is the lowest level and most descriptive variable. It indicates which item in scale something is. So it may be "kind" for Agreebleness or "sex" for the demographic biological sex variable.  
-11. *year*: for longitudinal data, we have several waves of data and the name of the same item across waves is often different, so it's important to note to which wave an item belongs. You can do this by noting the wave (e.g. 1, 2, 3), but I prefer the actual year the data were collected (e.g. 2005, 2009, etc.)  
-11. *new_name*: This is a column that brings together much of the information we've already collected. It's purpose is to be the new name that we will give to the variable that is more useful and descriptive to us. This is a constructed variable that brings together others. I like to make it a combination of "category", "label", "item_name", and year using varying combos of "_" and "." that we can use later with tidyverse functions. I typically construct this variable in Excel using the `CONCATENATE()` function, but it could also be done in `R`. The reason I do it in Excel is that it makes it easier for someone who may be reviewing my codebook.  
-12. *meta*: Some datasets have a meta name, which essentially means a name that variable has across all waves to make it clear which variables are the same. They are not always useful as some data sets have meta names but no great way of extracting variables using them. But they're still typically useful to include in your codebook regardless.  
+Here are additional columns that will make our lives easier or are applicable to some but not all data sets:  
+9. **category**: broad categories that different variables can be put into. I'm a fan of naming them things like "outcome", "predictor", "moderator", "demographic", "procedural", etc. but sometimes use more descriptive labels like "Big 5" to indicate the model from which the measures are derived.  
+10. **label**: label is basically one level lower than category. So if the category is Big 5, the label would be, or example, "A" for Agreeableness, "SWB" for subjective well-being, etc. This column is most important and useful when you have multiple items in a scales, so I'll typically leave this blank when something is a standalone variable (e.g. sex, single-item scales, etc.).  
+11. **item_name**: This is the lowest level and most descriptive variable. It indicates which item in scale something is. So it may be "kind" for Agreebleness or "sex" for the demographic biological sex variable.  
+12. **year**: for longitudinal data, we have several waves of data and the name of the same item across waves is often different, so it's important to note to which wave an item belongs. You can do this by noting the wave (e.g. 1, 2, 3), but I prefer the actual year the data were collected (e.g. 2005, 2009, etc.)  
+13. **new_name**: This is a column that brings together much of the information we've already collected. It's purpose is to be the new name that we will give to the variable that is more useful and descriptive to us. This is a constructed variable that brings together others. I like to make it a combination of "category", "label", "item_name", and year using varying combos of "_" and "." that we can use later with tidyverse functions. I typically construct this variable in Excel using the `CONCATENATE()` function, but it could also be done in `R`. The reason I do it in Excel is that it makes it easier for someone who may be reviewing my codebook.  
+14. **meta**: Some datasets have a meta name, which essentially means a name that variable has across all waves to make it clear which variables are the same. They are not always useful as some data sets have meta names but no great way of extracting variables using them. But they're still typically useful to include in your codebook regardless.  
 
 Below, I'll load in the codebook we will use for this study, which will include all of the above columns. 
 ```{r codebook}
@@ -115,6 +116,8 @@ tibble(year = c(2005:2015)) %>%
   write.csv(., file = "~/Documents/Github/R-tutorials/ALDA/week_1_descriptives/data/wdeek_1_data.csv", row.names = F)
 ```
 
+This code below shows how I would read in and rename a wide-format data set using the codebook I created.  
+
 ```{r load data}
 old.names <- codebook$old_name # get old column names
 new.names <- codebook$new_name # get new column names
@@ -160,9 +163,25 @@ Before we can do that, though, we need to restructure the data a bit in order to
 ```
 
 ## Create Composites   
-Now that we have reverse coded our items, we can create composites of our scales -- in this case, the Big 5. 
+
+
+Now that we have reverse coded our items, we can create composites. 
+
+### BFI-S 
+We'll start with our scale -- in this case, the Big 5 from the German translation of the BFI-S. 
+
+Here's the simplest way, which is also the long way because you'd have to do it for each scale in each year, which I don't recommend. 
+
+```{r}
+soep$C.2005 <- with(soep, rowMeans(cbind(`Big 5__C_thorough.2005`, `Big 5__C_lazy.2005`, 
+                          `Big 5__C_efficient.2005`), na.rm = T)) 
+```
+
+But personally, I don't have a desire to do that 15 times, so we can use our codebook and `dplyr` to make our lives a whole lot easier.  
 
 ```{r b5 composites}
+soep <- soep %>% select(-C.2005) # get rid of added column
+
 (b5_soep_long <- soep_long %>%
   filter(type == "Big 5") %>% # keep Big 5 variables
   group_by(Procedural__SID, item, year) %>% # group by person, construct, & year
@@ -173,6 +192,7 @@ Now that we have reverse coded our items, we can create composites of our scales
     distinct()))
 ```
 
+### Life Events  
 We also want to create a variable that indexes whether our participants experienced any of the life events during the years of interest (2005-2015).  
 ```{r events}
 (events_long <- soep_long %>%
@@ -212,7 +232,15 @@ When we work with scales, it's often a good idea to check the internal consisten
 
 To check the internal consistency of our Big 5 scales, we will use the `alpha()` function from the `psych` package, which will give us Cronbach's \alpha as well as a number of other indicators of internal consistency.  
 
-To do this, I'm going to use a mix of the tidyverse. At first glance, it may seem complex but as you move through other tutorials (particularly the `purrr` tutorial), it will begin to make much more sense.  
+Here's the way you may have seen / done this in the past.  
+```{r}
+alpha.C.2005 <- with(soep, psych::alpha(x = cbind(`Big 5__C_thorough.2005`, 
+                                  `Big 5__C_lazy.2005`, `Big 5__C_efficient.2005`)))
+```
+
+But again, doing this 15 times would be quite a pain and would open you up to the possibility of a lot of copy and paste errors.  
+
+So instead, to do this, I'm going to use a mix of the tidyverse. At first glance, it may seem complex but as you move through other tutorials (particularly the `purrr` tutorial), it will begin to make much more sense.  
 
 ```{r}
 # short function to reshape data and run alpha
