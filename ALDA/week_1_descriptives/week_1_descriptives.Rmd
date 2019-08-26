@@ -105,7 +105,7 @@ tibble(year = c(2005:2015)) %>%
   write.csv(., file = "~/Documents/Github/R-tutorials/ALDA/week_1_descriptives/data/wdeek_1_data.csv", row.names = F)
 ```
 
-```{r}
+```{r load data}
 old.names <- codebook$old_name # get old column names
 new.names <- codebook$new_name # get new column names
 
@@ -116,16 +116,54 @@ new.names <- codebook$new_name # get new column names
 ```
 
 # Clean Data  
-## Reverse-Scoring  
-```{r}
-
-```
-
-## Create Composites   
 
 ## Recode Variables  
 
+## Reverse-Scoring  
+Many scales we use have items that are positively or negatively keyed. High ratings on positively keyed items are indicative of being high on a construct. In contrast, high ratings on negatively keyed items are indicative of being low on a construct. Thus, to create the composite scores of constructs we often use, we must first "reverse" the negatively keyed items so that high scores indicate being higher on the construct. 
+
+There are a few ways to do this in `R`. Below, I'll demonstrate how to do so using the `reverse.code()` function in the `psych` package in `R`. This function was built to make reverse coding more efficient (i.e. please don't run every item that needs to be recoded with separate lines of code!!).
+
+Before we can do that, though, we need to restructure the data a bit in order to bring in the reverse coding information from our codebook. We will talk more about what's happening here in later tutorials on  `tidyr`, so for now, just bear with me.  
+```{r}
+soep_long <- soep %>%
+  gather(key = item, value = value, -contains("Procedural"), # change to long format
+         -contains("Demographic"), na.rm = T) %>%
+  left_join(codebook %>% select(item = new_name, reverse, mini, maxi)) %>% # bring in codebook
+  separate(item, c("type", "item"), sep = "__") %>% # separate category
+  separate(item, c("item", "year"), sep = "[.]") %>% # seprate year
+  separate(item, c("item", "scrap"), sep = "_") %>% # separate scale and item
+  mutate(value = as.numeric(value), # change to numeric
+         value = ifelse(value  < 0, NA, value), # recode missings to NA
+         value = ifelse(reverse == -1, reverse.code(-1, value, mini = mini, maxi = maxi), value))
+```
+
+## Create Composites   
+Now that we have reverse coded our items, we can create composites of our scales -- in this case, the Big 5. 
+```{r}
+b5_soep_long <- soep_long %>%
+  filter(type == "Big 5") %>%
+  group_by(Procedural__SID, item, year) %>% 
+  summarize(value = mean(value, na.rm = T)) %>%
+  left_join(soep_long %>% 
+    select(Procedural__SID, DOB = Demographic__DOB.2005, Sex = Demographic__Sex.2005) %>%
+    distinct()) %>%
+  filter(!is.na(DOB))
+```
+
 # Descriptives  
+Descriptives of your data are incredibly important. They are your first line of defense against things that could go wrong later on when you run inferential stats. The help you check the distribution of your variables (e.g. non-normally distributed), look for implausible 
+
+There are lots of ways to create great tables of descriptives. My favorite way is using `dplyr`, but we will save that for a later lesson on creating great APA style tables in `R`. For now, we'll use a wonderfully helpful function from the `psych` package called `describe()` in conjunction with a small amount of `tidyr` to reshape the data. 
+
+
+```{r}
+b5_soep_long  %>%
+  unite(tmp, item, year, sep = "_") %>%
+  spread(tmp, value)
+describe()
+```
+
 
 ## Scale Reliability  
 
