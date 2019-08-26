@@ -95,13 +95,23 @@ read_fun <- function(Year){
   sprintf("%s/%s.sav", path, set) %>% haven::read_sav(.) %>%
     full_join(ref) %>%
     filter(rgroup20 > 10) %>%
-    select(vars) 
+    select(one_of(vars)) %>%
+    gather(key = item, value = value, -persnr, -hhnr, na.rm = T)
 }
 
+vars <- (codebook %>% filter(year == 0))$old_name
+dem <- sprintf("%s/ppfad.sav", path) %>% 
+  haven::read_sav(.) %>%
+  select(vars)
+  
 tibble(year = c(2005:2015)) %>%
   mutate(data = map(year, read_fun)) %>%
   select(-year) %>% 
   unnest(data) %>%
+  distinct() %>% 
+  filter(!is.na(value)) %>%
+  spread(key = item, value = value) %>%
+  left_join(dem) %>%
   write.csv(., file = "~/Documents/Github/R-tutorials/ALDA/week_1_descriptives/data/wdeek_1_data.csv", row.names = F)
 ```
 
@@ -118,6 +128,16 @@ new.names <- codebook$new_name # get new column names
 # Clean Data  
 
 ## Recode Variables  
+Many of the data we work with have observations that are missing for a variety of reasons. In `R`, we treat missing values as `NA`, but many other programs from which you may be importing your data may use other codes (e.g. 999, -999, etc.). Large panel studies tend to use small negative values to indicate different types of missingness.  This is why it is important to note down the scale in your codebook. That way you can check which values may need to be recoded to explicit `NA` values. 
+
+In the GSOEP, `-1` to `-7` indicate various types of missing values, so we will recode these to `NA`. To do this, we will use one of my favorite functions, `mapvalues()`, from the `plyr` package. In later tutorials where we read in and manipulate more complex data sets, we will use `mapvalues()` a lot. Basically, mapvalues takes 4 key arguments: (1) the variable you are recoding, (2) a vector of initial values `from` which you want to (3) recode your variable `to` using a vector of new values in the same order as the old values, and (4) a way to turn off warnings if some levels are not in your data (`warn_missing = F`).  
+
+```{r recode}
+(soep <- soep %>%
+  mutate_all(~as.numeric(mapvalues(., from = seq(-1,-7, -1), # recode negative 
+                to = rep(NA, 7), warn_missing = F)))) # values to NA
+```
+
 
 ## Reverse-Scoring  
 Many scales we use have items that are positively or negatively keyed. High ratings on positively keyed items are indicative of being high on a construct. In contrast, high ratings on negatively keyed items are indicative of being low on a construct. Thus, to create the composite scores of constructs we often use, we must first "reverse" the negatively keyed items so that high scores indicate being higher on the construct. 
@@ -125,8 +145,9 @@ Many scales we use have items that are positively or negatively keyed. High rati
 There are a few ways to do this in `R`. Below, I'll demonstrate how to do so using the `reverse.code()` function in the `psych` package in `R`. This function was built to make reverse coding more efficient (i.e. please don't run every item that needs to be recoded with separate lines of code!!).
 
 Before we can do that, though, we need to restructure the data a bit in order to bring in the reverse coding information from our codebook. We will talk more about what's happening here in later tutorials on  `tidyr`, so for now, just bear with me.  
-```{r}
-soep_long <- soep %>%
+
+```{r reverse code}
+(soep_long <- soep %>%
   gather(key = item, value = value, -contains("Procedural"), # change to long format
          -contains("Demographic"), na.rm = T) %>%
   left_join(codebook %>% select(item = new_name, reverse, mini, maxi)) %>% # bring in codebook
@@ -134,375 +155,82 @@ soep_long <- soep %>%
   separate(item, c("item", "year"), sep = "[.]") %>% # seprate year
   separate(item, c("item", "scrap"), sep = "_") %>% # separate scale and item
   mutate(value = as.numeric(value), # change to numeric
-         value = ifelse(value  < 0, NA, value), # recode missings to NA
-         value = ifelse(reverse == -1, reverse.code(-1, value, mini = mini, maxi = maxi), value))
+         value = ifelse(reverse == -1, 
+            reverse.code(-1, value, mini = mini, maxi = maxi), value)))
 ```
 
 ## Create Composites   
 Now that we have reverse coded our items, we can create composites of our scales -- in this case, the Big 5. 
-```{r}
-b5_soep_long <- soep_long %>%
-  filter(type == "Big 5") %>%
-  group_by(Procedural__SID, item, year) %>% 
-  summarize(value = mean(value, na.rm = T)) %>%
-  left_join(soep_long %>% 
-    select(Procedural__SID, DOB = Demographic__DOB.2005, Sex = Demographic__Sex.2005) %>%
-    distinct()) %>%
-  filter(!is.na(DOB))
+
+```{r b5 composites}
+(b5_soep_long <- soep_long %>%
+  filter(type == "Big 5") %>% # keep Big 5 variables
+  group_by(Procedural__SID, item, year) %>% # group by person, construct, & year
+  summarize(value = mean(value, na.rm = T)) %>% # calculate means
+  ungroup() %>% # ungroup
+  left_join(soep_long %>% # bring demographic info back in 
+    select(Procedural__SID, DOB = Demographic__DOB, Sex = Demographic__Sex) %>%
+    distinct()))
 ```
+
+We also want to create a variable that indexes whether our participants experienced any of the life events during the years of interest (2005-2015).  
+```{r events}
+(events_long <- soep_long %>%
+  filter(type == "Life Event") %>% # keep only life events
+  group_by(Procedural__SID, item) %>% # group by person and event
+  summarize(value = sum(value, na.rm = T), # sum up whether they experiened the event at all
+            value = ifelse(value > 1, 1, 0))) # if more than once 1, otherwise 0
+```
+
 
 # Descriptives  
 Descriptives of your data are incredibly important. They are your first line of defense against things that could go wrong later on when you run inferential stats. The help you check the distribution of your variables (e.g. non-normally distributed), look for implausible 
 
 There are lots of ways to create great tables of descriptives. My favorite way is using `dplyr`, but we will save that for a later lesson on creating great APA style tables in `R`. For now, we'll use a wonderfully helpful function from the `psych` package called `describe()` in conjunction with a small amount of `tidyr` to reshape the data. 
 
-
-```{r}
+```{r b5 descriptives}
 b5_soep_long  %>%
-  unite(tmp, item, year, sep = "_") %>%
-  spread(tmp, value)
-describe()
+  unite(tmp, item, year, sep = "_") %>% # make new column that joins item and year
+  spread(tmp, value) %>% # make wide because that helps describe
+  describe(.) # call describe
 ```
 
+For count variables, like life events, we need to use something slightly different. We're typically more interested in counts -- in this case, how many people experienced each life event in the 10 years we're considering?  
+
+To do this, we'll use a little bit of `dplyr` rather than the base `R` function `table()` that is often used for count data. Instead, we'll use a combination of `group_by()` and `n()` to get the counts by group. In the end, we're left with a nice little table of counts.    
+
+```{r life event descriptives}
+events_long %>%
+  group_by(item, value) %>% 
+  summarize(N = n()) %>%
+  ungroup() %>%
+  spread(value, N)
+```
 
 ## Scale Reliability  
+When we work with scales, it's often a good idea to check the internal consistency of your scale. If the scale isn't performing how it should be, that could critically impact the inferences you make from your data. 
+
+To check the internal consistency of our Big 5 scales, we will use the `alpha()` function from the `psych` package, which will give us Cronbach's \alpha as well as a number of other indicators of internal consistency.  
+
+To do this, I'm going to use a mix of the tidyverse. At first glance, it may seem complex but as you move through other tutorials (particularly the `purrr` tutorial), it will begin to make much more sense.  
+
+```{r}
+# short function to reshape data and run alpha
+alpha_fun <- function(df){
+  df %>% spread(scrap,value) %>% psych::alpha(.)
+}
+
+(alphas <- soep_long %>%
+  filter(type == "Big 5") %>% # filter out Big 5
+  select(Procedural__SID, item:value) %>% # get rid of extra columns
+  group_by(item, year) %>% # group by construct and year
+  nest() %>% # nest the data
+  mutate(alpha_res = map(data, alpha_fun), # run alpha
+         alpha = map(alpha_res, ~.$total[2])) %>% # get the alpha value
+  unnest(alpha)) # pull it out of the list column
+```
 
 ## Zero-Order Correlations
+Finally, we often want to look at the zero-order correlation among study variables to make sure they are performing as we think they should. 
 
-
-# Inter-Item Correlations  
-The idea of inter-item correlations involves 2 concepts, coherence and differentiation. Items in the same scale should be related to one another and not related to items in other scales. To test this, we will use the `cor()` function  in R to calculate the correlation matrix of items in a scale.
-
-Below, I've added code to do pull out the itmes from the Agreeableness scale then to use that to calculate the correlations among those items. Run the code below and look at the results. Then do so for Extraversion, Conscientiousness, EmotionalStability, and Intellect.  
-
-## IPIP20
-```{r}
-a <- ipip20 %>% select(contains("Agreeableness"))
-c <- ipip20 %>% select(contains("Conscientiousness"))
-e <- ipip20 %>% select(contains("Extraversion"))
-n <- ipip20 %>% select(contains("EmotionalStability"))
-o <- ipip20 %>% select(contains("Intellect"))
-
-(r_a <- cor(a, use = "pairwise"))
-(r_c <- cor(c, use = "pairwise"))
-(r_e <- cor(e, use = "pairwise"))
-(r_n <- cor(n, use = "pairwise"))
-(r_o <- cor(o, use = "pairwise"))
-```
-
-
-## Reverse Coding
-Did you notice anything odd? If you remember from your reading, psychometricians often use items that capture the opposite of the construct under investigation to control for social desirability (sort of).  
-
-The code below will load in the keys (positive or negative) for each of the data sets (data frames called `ipip20_items`, `ipip50_items`, and `ipip100_items`). I demonstrate reverse coding for the ipip20 data set. Your challenge is to also do so for the ipip50 and ipip100.  
-
-```{r}
-load("~/Dropbox (Brown)/Summer 2018/RA Files/Week 1 Scales/data/keys.RData")
-
-keys20 <- ipip20_items$rev_code
-keys50 <- ipip50_items$rev_code
-keys100 <- ipip100_items$rev_code
-
-ipip20[5:24] <- reverse.code(ipip20[5:24], keys = keys20)
-ipip50[5:54] <- reverse.code(ipip50[5:54], keys = keys50)
-ipip100[5:104] <- reverse.code(ipip100[5:104], keys = keys100)
-```
-
-Now that we've reverse coded the items, we can recalculate the correlations. They should make more sense now.  
-
-## Back to IPIP20  
-Do the same we did above for the remaining Big 5 traits for the IPIP20. Then do so for the IPIP50 and IPIP100.  
-
-```{r}
-a20 <- ipip20 %>% select(contains("Agreeableness"))
-c20 <- ipip20 %>% select(contains("Conscientiousness"))
-e20 <- ipip20 %>% select(contains("Extraversion"))
-n20 <- ipip20 %>% select(contains("EmotionalStability"))
-o20 <- ipip20 %>% select(contains("Intellect"))
-
-(r_a20 <- cor(a20, use = "pairwise"))
-(r_c20 <- cor(c20, use = "pairwise"))
-(r_e20 <- cor(e20, use = "pairwise"))
-(r_n20 <- cor(n20, use = "pairwise"))
-(r_o20 <- cor(o20, use = "pairwise"))
-```
-
-## IPIP50
-```{r}
-a50 <- ipip50 %>% select(contains("Agreeableness"))
-c50 <- ipip50 %>% select(contains("Conscientiousness"))
-e50 <- ipip50 %>% select(contains("Extraversion"))
-n50 <- ipip50 %>% select(contains("EmotionalStability"))
-o50 <- ipip50 %>% select(contains("Intellect"))
-
-(r_a50 <- cor(a50, use = "pairwise"))
-(r_c50 <- cor(c50, use = "pairwise"))
-(r_e50 <- cor(e50, use = "pairwise"))
-(r_n50 <- cor(n50, use = "pairwise"))
-(r_o50 <- cor(o50, use = "pairwise"))
-```
-
-## IPIP100
-```{r}
-a100 <- ipip100 %>% select(contains("Agreeableness"))
-c100 <- ipip100 %>% select(contains("Conscientiousness"))
-e100 <- ipip100 %>% select(contains("Extraversion"))
-n100 <- ipip100 %>% select(contains("EmotionalStability"))
-o100 <- ipip100 %>% select(contains("Intellect"))
-
-(r_a100 <- cor(a100, use = "pairwise"))
-(r_c100 <- cor(c100, use = "pairwise"))
-(r_e100 <- cor(e100, use = "pairwise"))
-(r_n100 <- cor(n100, use = "pairwise"))
-(r_o100 <- cor(o100, use = "pairwise"))
-```
-
-
-## Average Inter-Item Correlations  
-Now that we've looked at individual item level correlations, the next step is to look at them on average, with the idea that items within a scale should have similar relationships to one another and be high on average.  
-
-Below, you see code to first remove the lower triangle of the correlation matrix and the diagonal to remove redundancy in the correlation matrix of Agreeableness (since correlation matrices are symmetric). Then you see code to take that matrix and calculate its mean.  
-
-
-```{r}
-r_a20[lower.tri(r_a20, diag = T)] <- NA
-r_c20[lower.tri(r_c20, diag = T)] <- NA
-r_e20[lower.tri(r_e20, diag = T)] <- NA
-r_n20[lower.tri(r_n20, diag = T)] <- NA
-r_o20[lower.tri(r_o20, diag = T)] <- NA
-
-mean(r_a20, na.rm = T)
-mean(r_c20, na.rm = T)
-mean(r_e20, na.rm = T)
-mean(r_n20, na.rm = T)
-mean(r_o20, na.rm = T)
-```
-
-```{r}
-r_a50[lower.tri(r_a50, diag = T)] <- NA
-r_c50[lower.tri(r_c50, diag = T)] <- NA
-r_e50[lower.tri(r_e50, diag = T)] <- NA
-r_n50[lower.tri(r_n50, diag = T)] <- NA
-r_o50[lower.tri(r_o50, diag = T)] <- NA
-
-mean(r_a50, na.rm = T)
-mean(r_c50, na.rm = T)
-mean(r_e50, na.rm = T)
-mean(r_n50, na.rm = T)
-mean(r_o50, na.rm = T)
-```
-
-```{r}
-r_a100[lower.tri(r_a100, diag = T)] <- NA
-r_c100[lower.tri(r_c100, diag = T)] <- NA
-r_e100[lower.tri(r_e100, diag = T)] <- NA
-r_n100[lower.tri(r_n100, diag = T)] <- NA
-r_o100[lower.tri(r_o100, diag = T)] <- NA
-
-mean(r_a100, na.rm = T)
-mean(r_c100, na.rm = T)
-mean(r_e100, na.rm = T)
-mean(r_n100, na.rm = T)
-mean(r_o100, na.rm = T)
-```
-
-# Item-Total Correlations  
-Item-total correlations are what they sound like -- the correlation between a single item and a composite (mean) of all other items. Here, for simplicity, we're going to be a little lazy and correlate each item with a composite that includes itself. Because this artificially inflates the correlation, I'll later show you a way to get an estiamte that doesn't include this item.  
-
-## Manual Method  
-
-### IPIP20  
-```{r}
-(a20_itr <- cor(a20, rowMeans(a20, na.rm = T), use = "pairwise"))
-(c20_itr <- cor(c20, rowMeans(c20, na.rm = T), use = "pairwise"))
-(e20_itr <- cor(e20, rowMeans(e20, na.rm = T), use = "pairwise"))
-(n20_itr <- cor(n20, rowMeans(n20, na.rm = T), use = "pairwise"))
-(o20_itr <- cor(o20, rowMeans(o20, na.rm = T), use = "pairwise"))
-
-mean(a20_itr)
-mean(c20_itr)
-mean(e20_itr)
-mean(n20_itr)
-mean(o20_itr)
-```
-
-### IPIP50  
-```{r}
-(a50_itr <- cor(a50, rowMeans(a50, na.rm = T), use = "pairwise"))
-(c50_itr <- cor(c50, rowMeans(c50, na.rm = T), use = "pairwise"))
-(e50_itr <- cor(e50, rowMeans(e50, na.rm = T), use = "pairwise"))
-(n50_itr <- cor(n50, rowMeans(n50, na.rm = T), use = "pairwise"))
-(o50_itr <- cor(o50, rowMeans(o50, na.rm = T), use = "pairwise"))
-
-mean(a50_itr)
-mean(c50_itr)
-mean(e50_itr)
-mean(n50_itr)
-mean(o50_itr)
-```
-
-### IPIP100  
-```{r}
-(a100_itr <- cor(a100, rowMeans(a100, na.rm = T), use = "pairwise"))
-(c100_itr <- cor(c100, rowMeans(c100, na.rm = T), use = "pairwise"))
-(e100_itr <- cor(e100, rowMeans(e100, na.rm = T), use = "pairwise"))
-(n100_itr <- cor(n100, rowMeans(n100, na.rm = T), use = "pairwise"))
-(o100_itr <- cor(o100, rowMeans(o100, na.rm = T), use = "pairwise"))
-
-mean(a100_itr)
-mean(c100_itr)
-mean(e100_itr)
-mean(n100_itr)
-mean(o100_itr)
-```
-
-## `psych` package  
-The `psych` package will give us a method for calculating item-total correlations that do not aritificially inflate the correlations. Below, you see the code for doing so using the `alpha()` function from the `psych` package. 
-
-Run the code below for Agreeablness, then repeat for the rest of the Big 5. Once you've done that, do the same for the ipip50 and ipip100.  
-
-### IPIP20  
-```{r}
-(a20_alpha <- psych::alpha(a20))
-(c20_alpha <- psych::alpha(c20))
-(e20_alpha <- psych::alpha(e20))
-(n20_alpha <- psych::alpha(n20))
-(o20_alpha <- psych::alpha(o20))
-
-a20_alpha$item.stats
-c20_alpha$item.stats
-e20_alpha$item.stats
-n20_alpha$item.stats
-o20_alpha$item.stats
-```
-
-### IPIP50  
-```{r}
-(a50_alpha <- psych::alpha(a50))
-(c50_alpha <- psych::alpha(c50))
-(e50_alpha <- psych::alpha(e50))
-(n50_alpha <- psych::alpha(n50))
-(o50_alpha <- psych::alpha(o50))
-
-a50_alpha$item.stats
-c50_alpha$item.stats
-e50_alpha$item.stats
-n50_alpha$item.stats
-o50_alpha$item.stats
-```
-
-### IPIP100  
-```{r}
-(a100_alpha <- psych::alpha(a100))
-(c100_alpha <- psych::alpha(c100))
-(e100_alpha <- psych::alpha(e100))
-(n100_alpha <- psych::alpha(n100))
-(o100_alpha <- psych::alpha(o100))
-
-a100_alpha$item.stats
-c100_alpha$item.stats
-e100_alpha$item.stats
-n100_alpha$item.stats
-o100_alpha$item.stats
-```
-
-What do you notice about the correlations?
-
-# Split-Half Reliability  
-Split-half methods are basically a way of testing whether items belong in a scale by looking at whether composites of arbitrary halves of the scale tend to be related to one another. If they are, then this suggests the items are likely to be very related to one another in general.  
-
-Below, you see code for correlating the first and second halves of the Agreeableness scale in the IPIP20. Do the same for the rest of the Big 5 then for the IPIP50 and IPIP100.  
-
-## Manual Method  
-### IPIP20  
-```{r}
-cor(rowMeans(a20[,1:2]), rowMeans(a20[,3:4]))
-cor(rowMeans(c20[,1:2]), rowMeans(c20[,3:4]))
-cor(rowMeans(e20[,1:2]), rowMeans(e20[,3:4]))
-cor(rowMeans(n20[,1:2]), rowMeans(n20[,3:4]))
-cor(rowMeans(o20[,1:2]), rowMeans(o20[,3:4]))
-```
-
-### IPIP50  
-```{r}
-cor(rowMeans(a50[,1:5]), rowMeans(a50[,6:10]))
-cor(rowMeans(c50[,1:5]), rowMeans(c50[,6:10]))
-cor(rowMeans(e50[,1:5]), rowMeans(e50[,6:10]))
-cor(rowMeans(n50[,1:5]), rowMeans(n50[,6:10]))
-cor(rowMeans(o50[,1:5]), rowMeans(o50[,6:10]))
-```
-
-### IPIP100   
-```{r}
-cor(rowMeans(a100[,1:10]), rowMeans(a100[,11:10]))
-cor(rowMeans(c100[,1:10]), rowMeans(c100[,11:10]))
-cor(rowMeans(e100[,1:10]), rowMeans(e100[,11:10]))
-cor(rowMeans(n100[,1:10]), rowMeans(n100[,11:10]))
-cor(rowMeans(o100[,1:10]), rowMeans(o100[,11:10]))
-```
-
-Can you think of any reasons why splitting a scale into first and second halves of the scale could be an issue? Can you think of a solution?  
-
-## `psych` package  
-The `psych` pacakge has another helpful function, called `splithalf()` that doesn't just choose one arbitrary split of the scale. Instead, it tests all possible splits and gives you the average estimate, which is a more robust estimate.
-
-Below, you see the code for calculating the split-half correlation between items in the Agreeableness scale. Do the same for the rest of the Big 5, then the same for the IPIP50 and IPIP100.  
-
-### IPIP20  
-```{r}
-splitHalf(a20)
-splitHalf(c20)
-splitHalf(e20)
-splitHalf(n20)
-splitHalf(o20)
-```
-
-### IPIP50  
-```{r}
-splitHalf(a50)
-splitHalf(c50)
-splitHalf(e50)
-splitHalf(n50)
-splitHalf(o50)
-```
-
-### IPIP100  
-```{r}
-splitHalf(a100)
-splitHalf(c100)
-splitHalf(e100)
-splitHalf(n100)
-splitHalf(o100)
-```
-
-# Cronbach's alpha  
-Finally, the most popular test of internal consistency of a scale is Cronbach's alpha. Basically, what this does is is extend the Spearman Brown prophecy formula, which relies on the split-half correlation to capture all possible split halves.  
-
-The alpha function already calculates this for us, so below, you see code to access that from the results of that function call. Access this for the rest of the Big 5 for the IPIP20, then for the IPIP50 and IPIP100.  
-
-```{r}
-a20_alpha$total
-c20_alpha$total
-e20_alpha$total
-n20_alpha$total
-o20_alpha$total
-```
-
-```{r}
-a50_alpha$total
-c50_alpha$total
-e50_alpha$total
-n50_alpha$total
-o50_alpha$total
-```
-
-```{r}
-a100_alpha$total
-c100_alpha$total
-e100_alpha$total
-n100_alpha$total
-o100_alpha$total
-```
-
-# Scale Development  
 
