@@ -17,9 +17,9 @@ editor_options:
 ---
 
 # What Are Data?  
-Data are the core of everything that we do in statistical analysis. Data come in many forms, and I don't just mean `.csv`, `.xls`, `.sav`, etc. Data can be wide, long, documented, fragmented, messy, and about anything else that you can imagine. 
+Data are the core of everything that we do in statistical analysis. Data come in many forms, and I don't just mean `.csv`, `.xls`, `.sav`, etc. Data can be wide, long, documented, fragmented, messy, and about anything else that you can imagine.  
 
-Although data could arguably be more means than end in psychology, the importance of understanding the structure and format of your data cannot overstated. Failure to understand your data could end in improper techniques and flagrantly wrong inferences at worst.
+Although data could arguably be more means than end in psychology, the importance of understanding the structure and format of your data cannot overstated. Failure to understand your data could end in improper techniques and flagrantly wrong inferences at worst.  
 
 In this tutorial, we are going to talk data management and basic data cleaning. Other tutorials will go more in depth into data cleaning and reshaping. This tutorial is meant to prepare you to think about those in more nuanced ways and to help you develop a functional workflow for conducting your own research.  
 
