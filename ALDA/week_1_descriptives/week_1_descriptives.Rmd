@@ -52,7 +52,7 @@ The second step is a codebook. Arguably, this is the first step because you shou
 
 In this case, we are going to using some data from the [German Socioeconomic Panel Study (GSOEP)](https://www.diw.de/en/soep/), which is an ongoing Panel Study in Germany. Note that these data are for teaching purposes only, shared under the license for the Comprehensive SOEP teaching dataset, which I, as a contracted SOEP user, can use for teaching purposes. These data represent select cases from  the full data set and should not be used for the purpose of publication. The full data are available for free at https://www.diw.de/en/diw_02.c.222829.en/access_and_ordering.html.   
 
-For this tutorial, I created the codebook for you <a href="https://raw.githubusercontent.com/emoriebeck/R-tutorials/master/ALDA/week_1_descriptives/codebook.csv" download>(Download (won't work in Safari or IE))</a>, and included what I believe are the core columns you may need. Some of these columns may not be particularly helpful for every dataset. 
+For this tutorial, I created the codebook for you <a href="https://github.com/emoriebeck/R-tutorials/raw/master/ALDA/week_1_descriptives/codebook.csv" download>(Download (won't work in Safari or IE))</a>, and included what I believe are the core columns you may need. Some of these columns may not be particularly helpful for every dataset. 
 
 Here are my core columns that are based on the original data:  
 1. **dataset**: this column indexes the **name** of the dataset that you will be pulling the data from. This is important because we will use this info later on (see `purrr` tutorial) to load and clean specific data files. Even if you don't have multiple data sets, I believe consistency is more important and suggest using this.  
