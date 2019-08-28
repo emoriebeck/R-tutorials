@@ -1,0 +1,163 @@
+﻿dataset,old_name,item_text,scale,category,label,item_name,year,new_name,reverse,mini,maxi,recode
+,PERSNR,Never Changing Person ID,,Procedural,,SID,0,Procedural__SID,1,,,
+,hhnr,household ID,,Procedural,,household,0,Procedural__household,1,,,
+ppfad,gebjahr,Year of Birth,numeric,Demographic,,DOB,0,Demographic__DOB,1,,,
+ppfad,sex,Sex,"
+1 [1] Male
+2 [2] Female
+-1 [-1] No Answer
+-2 [-2] Does not apply
+-3 [-3] Answer improbable
+-4 [-4] Inadmissible multiple response
+-5 [-5] Not included in this version of the questionnaire
+-6 [-6] Version of questionnaire with modified filtering
+56186 57630 24 0 0 0 0 0",Demographic,,Sex,0,Demographic__Sex,1,,,
+vp,VP12501 ,Thorough Worker,,Big 5,C,thorough,2005,Big 5__C_thorough.2005,1,1,8,
+zp,ZP12001 ,Thorough Worker,,Big 5,C,thorough,2009,Big 5__C_thorough.2009,1,1,8,
+bdp,BDP15101 ,Thorough Worker,,Big 5,C,thorough,2013,Big 5__C_thorough.2013,1,1,8,
+vp,VP12502,Am communicative ,,Big 5,E,communic,2005,Big 5__E_communic.2005,1,1,8,
+zp,ZP12002,Am communicative ,,Big 5,E,communic,2009,Big 5__E_communic.2009,1,1,8,
+bdp,BDP15102,Am communicative ,,Big 5,E,communic,2013,Big 5__E_communic.2013,1,1,8,
+vp,VP12503,Am sometimes too coarse with others ,,Big 5,A,coarse,2005,Big 5__A_coarse.2005,-1,1,8,
+zp,ZP12003,Am sometimes too coarse with others ,,Big 5,A,coarse,2009,Big 5__A_coarse.2009,-1,1,8,
+bdp,BDP15103,Am sometimes too coarse with others ,,Big 5,A,coarse,2013,Big 5__A_coarse.2013,-1,1,8,
+vp,VP12504,Am original ,,Big 5,O,original,2005,Big 5__O_original.2005,1,1,8,
+zp,ZP12004,Am original ,,Big 5,O,original,2009,Big 5__O_original.2009,1,1,8,
+bdp,BDP15104,Am original ,,Big 5,O,original,2013,Big 5__O_original.2013,1,1,8,
+vp,VP12505,Worry a lot ,,Big 5,N,worry,2005,Big 5__N_worry.2005,-1,1,8,
+zp,ZP12005,Worry a lot ,,Big 5,N,worry,2009,Big 5__N_worry.2009,-1,1,8,
+bdp,BDP15105,Worry a lot ,,Big 5,N,worry,2013,Big 5__N_worry.2013,-1,1,8,
+vp,VP12506,Able to forgive ,,Big 5,A,forgive,2005,Big 5__A_forgive.2005,1,1,8,
+zp,ZP12006,Able to forgive ,,Big 5,A,forgive,2009,Big 5__A_forgive.2009,1,1,8,
+bdp,BDP15106,Able to forgive ,,Big 5,A,forgive,2013,Big 5__A_forgive.2013,1,1,8,
+vp,VP12507,Tend to be lazy ,,Big 5,C,lazy,2005,Big 5__C_lazy.2005,-1,1,8,
+zp,ZP12007,Tend to be lazy ,,Big 5,C,lazy,2009,Big 5__C_lazy.2009,-1,1,8,
+bdp,BDP15107,Tend to be lazy ,,Big 5,C,lazy,2013,Big 5__C_lazy.2013,-1,1,8,
+vp,VP12508,Am sociable ,,Big 5,E,sociable,2005,Big 5__E_sociable.2005,1,1,8,
+zp,ZP12008,Am sociable ,,Big 5,E,sociable,2009,Big 5__E_sociable.2009,1,1,8,
+bdp,BDP15108,Am sociable ,,Big 5,E,sociable,2013,Big 5__E_sociable.2013,1,1,8,
+vp,VP12509,Value artistic experiences,,Big 5,O,artistic,2005,Big 5__O_artistic.2005,1,1,8,
+zp,ZP12009,Value artistic experiences,,Big 5,O,artistic,2009,Big 5__O_artistic.2009,1,1,8,
+bdp,BDP15109,Value artistic experiences,,Big 5,O,artistic,2013,Big 5__O_artistic.2013,1,1,8,
+vp,VP12510,Somewhat nervous,,Big 5,N,nervous,2005,Big 5__N_nervous.2005,-1,1,8,
+zp,ZP12010,Somewhat nervous,,Big 5,N,nervous,2009,Big 5__N_nervous.2009,-1,1,8,
+bdp,BDP15110,Somewhat nervous,,Big 5,N,nervous,2013,Big 5__N_nervous.2013,-1,1,8,
+vp,VP12511,Carry out tasks efficiently,,Big 5,C,efficient,2005,Big 5__C_efficient.2005,1,1,8,
+zp,ZP12011,Carry out tasks efficiently,,Big 5,C,efficient,2009,Big 5__C_efficient.2009,1,1,8,
+bdp,BDP15111,Carry out tasks efficiently,,Big 5,C,efficient,2013,Big 5__C_efficient.2013,1,1,8,
+vp,VP12512,Reserved,,Big 5,E,reserved,2005,Big 5__E_reserved.2005,-1,1,8,
+zp,ZP12012,Reserved,,Big 5,E,reserved,2009,Big 5__E_reserved.2009,-1,1,8,
+bdp,BDP15112,Reserved,,Big 5,E,reserved,2013,Big 5__E_reserved.2013,-1,1,8,
+vp,VP12513,Friendly with others,,Big 5,A,friendly,2005,Big 5__A_friendly.2005,1,1,8,
+zp,ZP12013,Friendly with others,,Big 5,A,friendly,2009,Big 5__A_friendly.2009,1,1,8,
+bdp,BDP15113,Friendly with others,,Big 5,A,friendly,2013,Big 5__A_friendly.2013,1,1,8,
+vp,VP12514,Have a lively imagination,,Big 5,O,imagin,2005,Big 5__O_imagin.2005,1,1,8,
+zp,ZP12014,Have a lively imagination,,Big 5,O,imagin,2009,Big 5__O_imagin.2009,1,1,8,
+bdp,BDP15114,Have a lively imagination,,Big 5,O,imagin,2013,Big 5__O_imagin.2013,1,1,8,
+vp,VP12515,Deal well with stress,,Big 5,N,dealStress,2005,Big 5__N_dealStress.2005,1,1,8,
+zp,ZP12015,Deal well with stress,,Big 5,N,dealStress,2009,Big 5__N_dealStress.2009,1,1,8,
+bdp,BDP15115,Deal well with stress,,Big 5,N,dealStress,2013,Big 5__N_dealStress.2013,1,1,8,
+vp,VP15307,Child Born,,Life Event,,ChldBrth,2005,Life Event__ChldBrth.2005,1,,,1 = experienced; 0 = did not experience
+wp,WP14107,Child Born,,Life Event,,ChldBrth,2006,Life Event__ChldBrth.2006,1,,,1 = experienced; 0 = did not experience
+xp,XP14807,Child Born,,Life Event,,ChldBrth,2007,Life Event__ChldBrth.2007,1,,,1 = experienced; 0 = did not experience
+yp,YP15407,Child Born,,Life Event,,ChldBrth,2008,Life Event__ChldBrth.2008,1,,,1 = experienced; 0 = did not experience
+zp,ZP15607,Child Born,,Life Event,,ChldBrth,2009,Life Event__ChldBrth.2009,1,,,1 = experienced; 0 = did not experience
+bap,BAP15907,Child Born,,Life Event,,ChldBrth,2010,Life Event__ChldBrth.2010,1,,,1 = experienced; 0 = did not experience
+bbp,BBP15110,Child Born,,Life Event,,ChldBrth,2011,Life Event__ChldBrth.2011,1,,,1 = experienced; 0 = did not experience
+bcp,BCP15010,Child Born,,Life Event,,ChldBrth,2012,Life Event__ChldBrth.2012,1,,,1 = experienced; 0 = did not experience
+bdp,BDP15710,Child Born,,Life Event,,ChldBrth,2013,Life Event__ChldBrth.2013,1,,,1 = experienced; 0 = did not experience
+bep,BEP15010,Child Born,,Life Event,,ChldBrth,2014,Life Event__ChldBrth.2014,1,,,1 = experienced; 0 = did not experience
+bfp,BFP17310,Child Born,,Life Event,,ChldBrth,2015,Life Event__ChldBrth.2015,1,,,1 = experienced; 0 = did not experience
+vp,VP15310,Child Moved Out,,Life Event,,ChldMvOut,2005,Life Event__ChldMvOut.2005,1,,,1 = experienced; 0 = did not experience
+wp,WP14110,Child Moved Out,,Life Event,,ChldMvOut,2006,Life Event__ChldMvOut.2006,1,,,1 = experienced; 0 = did not experience
+xp,XP14813,Child Moved Out,,Life Event,,ChldMvOut,2007,Life Event__ChldMvOut.2007,1,,,1 = experienced; 0 = did not experience
+yp,YP15413,Child Moved Out,,Life Event,,ChldMvOut,2008,Life Event__ChldMvOut.2008,1,,,1 = experienced; 0 = did not experience
+zp,ZP15613,Child Moved Out,,Life Event,,ChldMvOut,2009,Life Event__ChldMvOut.2009,1,,,1 = experienced; 0 = did not experience
+bap,BAP15913,Child Moved Out,,Life Event,,ChldMvOut,2010,Life Event__ChldMvOut.2010,1,,,1 = experienced; 0 = did not experience
+bbp,BBP15116,Child Moved Out,,Life Event,,ChldMvOut,2011,Life Event__ChldMvOut.2011,1,,,1 = experienced; 0 = did not experience
+bcp,BCP15016,Child Moved Out,,Life Event,,ChldMvOut,2012,Life Event__ChldMvOut.2012,1,,,1 = experienced; 0 = did not experience
+bdp,BDP15716,Child Moved Out,,Life Event,,ChldMvOut,2013,Life Event__ChldMvOut.2013,1,,,1 = experienced; 0 = did not experience
+bep,BEP15016,Child Moved Out,,Life Event,,ChldMvOut,2014,Life Event__ChldMvOut.2014,1,,,1 = experienced; 0 = did not experience
+bfp,BFP17316,Child Moved Out,,Life Event,,ChldMvOut,2015,Life Event__ChldMvOut.2015,1,,,1 = experienced; 0 = did not experience
+vp,VP15316,Divorced,,Life Event,,Divorce,2005,Life Event__Divorce.2005,1,,,1 = experienced; 0 = did not experience
+wp,WP14116,Divorced,,Life Event,,Divorce,2006,Life Event__Divorce.2006,1,,,1 = experienced; 0 = did not experience
+xp,XP14819,Divorced,,Life Event,,Divorce,2007,Life Event__Divorce.2007,1,,,1 = experienced; 0 = did not experience
+yp,YP15419,Divorced,,Life Event,,Divorce,2008,Life Event__Divorce.2008,1,,,1 = experienced; 0 = did not experience
+zp,ZP15619,Divorced,,Life Event,,Divorce,2009,Life Event__Divorce.2009,1,,,1 = experienced; 0 = did not experience
+bap,BAP15919,Divorced,,Life Event,,Divorce,2010,Life Event__Divorce.2010,1,,,1 = experienced; 0 = did not experience
+bbp,BBP15122,Divorced,,Life Event,,Divorce,2011,Life Event__Divorce.2011,1,,,1 = experienced; 0 = did not experience
+bcp,BCP15022,Divorced,,Life Event,,Divorce,2012,Life Event__Divorce.2012,1,,,1 = experienced; 0 = did not experience
+bdp,BDP15722,Divorced,,Life Event,,Divorce,2013,Life Event__Divorce.2013,1,,,1 = experienced; 0 = did not experience
+bep,BEP15022,Divorced,,Life Event,,Divorce,2014,Life Event__Divorce.2014,1,,,1 = experienced; 0 = did not experience
+bfp,BFP17322,Divorced,,Life Event,,Divorce,2015,Life Event__Divorce.2015,1,,,1 = experienced; 0 = did not experience
+vp,VP15322,Father Died,,Life Event,,DadDied,2005,Life Event__DadDied.2005,1,,,1 = experienced; 0 = did not experience
+wp,WP14122,Father Died,,Life Event,,DadDied,2006,Life Event__DadDied.2006,1,,,1 = experienced; 0 = did not experience
+xp,XP14825,Father Died,,Life Event,,DadDied,2007,Life Event__DadDied.2007,1,,,1 = experienced; 0 = did not experience
+yp,YP15425,Father Died,,Life Event,,DadDied,2008,Life Event__DadDied.2008,1,,,1 = experienced; 0 = did not experience
+zp,ZP15625,Father Died,,Life Event,,DadDied,2009,Life Event__DadDied.2009,1,,,1 = experienced; 0 = did not experience
+bap,BAP15925,Father Died,,Life Event,,DadDied,2010,Life Event__DadDied.2010,1,,,1 = experienced; 0 = did not experience
+bbp,BBP15128,Father Died,,Life Event,,DadDied,2011,Life Event__DadDied.2011,1,,,1 = experienced; 0 = did not experience
+bcp,BCP15028,Father Died,,Life Event,,DadDied,2012,Life Event__DadDied.2012,1,,,1 = experienced; 0 = did not experience
+bdp,BDP15728,Father Died,,Life Event,,DadDied,2013,Life Event__DadDied.2013,1,,,1 = experienced; 0 = did not experience
+bep,BEP15028,Father Died,,Life Event,,DadDied,2014,Life Event__DadDied.2014,1,,,1 = experienced; 0 = did not experience
+bfp,BFP17328,Father Died,,Life Event,,DadDied,2015,Life Event__DadDied.2015,1,,,1 = experienced; 0 = did not experience
+bbp,BBP15101,Got Together with a New Partner,,Life Event,,NewPart,2011,Life Event__NewPart.2011,1,,,1 = experienced; 0 = did not experience
+bcp,BCP15001,Got Together with a New Partner,,Life Event,,NewPart,2012,Life Event__NewPart.2012,1,,,1 = experienced; 0 = did not experience
+bdp,BDP15701,Got Together with a New Partner,,Life Event,,NewPart,2013,Life Event__NewPart.2013,1,,,1 = experienced; 0 = did not experience
+bep,BEP15001,Got Together with a New Partner,,Life Event,,NewPart,2014,Life Event__NewPart.2014,1,,,1 = experienced; 0 = did not experience
+bfp,BFP17301,Got Together with a New Partner,,Life Event,,NewPart,2015,Life Event__NewPart.2015,1,,,1 = experienced; 0 = did not experience
+vp,VP15301,Married,,Life Event,,Married,2005,Life Event__Married.2005,1,,,1 = experienced; 0 = did not experience
+wp,WP14101,Married,,Life Event,,Married,2006,Life Event__Married.2006,1,,,1 = experienced; 0 = did not experience
+xp,XP14801,Married,,Life Event,,Married,2007,Life Event__Married.2007,1,,,1 = experienced; 0 = did not experience
+yp,YP15401,Married,,Life Event,,Married,2008,Life Event__Married.2008,1,,,1 = experienced; 0 = did not experience
+zp,ZP15601,Married,,Life Event,,Married,2009,Life Event__Married.2009,1,,,1 = experienced; 0 = did not experience
+bap,BAP15901,Married,,Life Event,,Married,2010,Life Event__Married.2010,1,,,1 = experienced; 0 = did not experience
+bbp,BBP15104,Married,,Life Event,,Married,2011,Life Event__Married.2011,1,,,1 = experienced; 0 = did not experience
+bcp,BCP15004,Married,,Life Event,,Married,2012,Life Event__Married.2012,1,,,1 = experienced; 0 = did not experience
+bdp,BDP15704,Married,,Life Event,,Married,2013,Life Event__Married.2013,1,,,1 = experienced; 0 = did not experience
+bep,BEP15004,Married,,Life Event,,Married,2014,Life Event__Married.2014,1,,,1 = experienced; 0 = did not experience
+bfp,BFP17304,Married,,Life Event,,Married,2015,Life Event__Married.2015,1,,,1 = experienced; 0 = did not experience
+vp,VP15325,Mother Died,,Life Event,,MomDied,2005,Life Event__MomDied.2005,1,,,1 = experienced; 0 = did not experience
+wp,WP14125,Mother Died,,Life Event,,MomDied,2006,Life Event__MomDied.2006,1,,,1 = experienced; 0 = did not experience
+xp,XP14828,Mother Died,,Life Event,,MomDied,2007,Life Event__MomDied.2007,1,,,1 = experienced; 0 = did not experience
+yp,YP15428,Mother Died,,Life Event,,MomDied,2008,Life Event__MomDied.2008,1,,,1 = experienced; 0 = did not experience
+zp,ZP15628,Mother Died,,Life Event,,MomDied,2009,Life Event__MomDied.2009,1,,,1 = experienced; 0 = did not experience
+bap,BAP15928,Mother Died,,Life Event,,MomDied,2010,Life Event__MomDied.2010,1,,,1 = experienced; 0 = did not experience
+bbp,BBP15131,Mother Died,,Life Event,,MomDied,2011,Life Event__MomDied.2011,1,,,1 = experienced; 0 = did not experience
+bcp,BCP15031,Mother Died,,Life Event,,MomDied,2012,Life Event__MomDied.2012,1,,,1 = experienced; 0 = did not experience
+bdp,BDP15731,Mother Died,,Life Event,,MomDied,2013,Life Event__MomDied.2013,1,,,1 = experienced; 0 = did not experience
+bep,BEP15031,Mother Died,,Life Event,,MomDied,2014,Life Event__MomDied.2014,1,,,1 = experienced; 0 = did not experience
+bfp,BFP17331,Mother Died,,Life Event,,MomDied,2015,Life Event__MomDied.2015,1,,,1 = experienced; 0 = did not experience
+vp,VP15304,Moved In Together,,Life Event,,MoveIn,2005,Life Event__MoveIn.2005,1,,,1 = experienced; 0 = did not experience
+wp,WP14104,Moved In Together,,Life Event,,MoveIn,2006,Life Event__MoveIn.2006,1,,,1 = experienced; 0 = did not experience
+xp,XP14804,Moved In Together,,Life Event,,MoveIn,2007,Life Event__MoveIn.2007,1,,,1 = experienced; 0 = did not experience
+yp,YP15404,Moved In Together,,Life Event,,MoveIn,2008,Life Event__MoveIn.2008,1,,,1 = experienced; 0 = did not experience
+zp,ZP15604,Moved In Together,,Life Event,,MoveIn,2009,Life Event__MoveIn.2009,1,,,1 = experienced; 0 = did not experience
+bap,BAP15904,Moved In Together,,Life Event,,MoveIn,2010,Life Event__MoveIn.2010,1,,,1 = experienced; 0 = did not experience
+bbp,BBP15107,Moved In Together,,Life Event,,MoveIn,2011,Life Event__MoveIn.2011,1,,,1 = experienced; 0 = did not experience
+bcp,BCP15007,Moved In Together,,Life Event,,MoveIn,2012,Life Event__MoveIn.2012,1,,,1 = experienced; 0 = did not experience
+bdp,BDP15707,Moved In Together,,Life Event,,MoveIn,2013,Life Event__MoveIn.2013,1,,,1 = experienced; 0 = did not experience
+bep,BEP15007,Moved In Together,,Life Event,,MoveIn,2014,Life Event__MoveIn.2014,1,,,1 = experienced; 0 = did not experience
+bfp,BFP17307,Moved In Together,,Life Event,,MoveIn,2015,Life Event__MoveIn.2015,1,,,1 = experienced; 0 = did not experience
+vp,VP15319,Partner Died,,Life Event,,PartDied,2005,Life Event__PartDied.2005,1,,,1 = experienced; 0 = did not experience
+wp,WP14119,Partner Died,,Life Event,,PartDied,2006,Life Event__PartDied.2006,1,,,1 = experienced; 0 = did not experience
+xp,XP14822,Partner Died,,Life Event,,PartDied,2007,Life Event__PartDied.2007,1,,,1 = experienced; 0 = did not experience
+yp,YP15422,Partner Died,,Life Event,,PartDied,2008,Life Event__PartDied.2008,1,,,1 = experienced; 0 = did not experience
+zp,ZP15622,Partner Died,,Life Event,,PartDied,2009,Life Event__PartDied.2009,1,,,1 = experienced; 0 = did not experience
+bap,BAP15922,Partner Died,,Life Event,,PartDied,2010,Life Event__PartDied.2010,1,,,1 = experienced; 0 = did not experience
+bbp,BBP15125,Partner Died,,Life Event,,PartDied,2011,Life Event__PartDied.2011,1,,,1 = experienced; 0 = did not experience
+bcp,BCP15025,Partner Died,,Life Event,,PartDied,2012,Life Event__PartDied.2012,1,,,1 = experienced; 0 = did not experience
+bdp,BDP15725,Partner Died,,Life Event,,PartDied,2013,Life Event__PartDied.2013,1,,,1 = experienced; 0 = did not experience
+bep,BEP15025,Partner Died,,Life Event,,PartDied,2014,Life Event__PartDied.2014,1,,,1 = experienced; 0 = did not experience
+bfp,BFP17325,Partner Died,,Life Event,,PartDied,2015,Life Event__PartDied.2015,1,,,1 = experienced; 0 = did not experience
+vp,VP15313,Separated From Partner,,Life Event,,SepPart,2005,Life Event__SepPart.2005,1,,,1 = experienced; 0 = did not experience
+wp,WP14113,Separated From Partner,,Life Event,,SepPart,2006,Life Event__SepPart.2006,1,,,1 = experienced; 0 = did not experience
+xp,XP14816,Separated From Partner,,Life Event,,SepPart,2007,Life Event__SepPart.2007,1,,,1 = experienced; 0 = did not experience
+yp,YP15416,Separated From Partner,,Life Event,,SepPart,2008,Life Event__SepPart.2008,1,,,1 = experienced; 0 = did not experience
+zp,ZP15616,Separated From Partner,,Life Event,,SepPart,2009,Life Event__SepPart.2009,1,,,1 = experienced; 0 = did not experience
+bap,BAP15916,Separated From Partner,,Life Event,,SepPart,2010,Life Event__SepPart.2010,1,,,1 = experienced; 0 = did not experience
+bbp,BBP15119,Separated From Partner,,Life Event,,SepPart,2011,Life Event__SepPart.2011,1,,,1 = experienced; 0 = did not experience
+bcp,BCP15019,Separated From Partner,,Life Event,,SepPart,2012,Life Event__SepPart.2012,1,,,1 = experienced; 0 = did not experience
+bdp,BDP15719,Separated From Partner,,Life Event,,SepPart,2013,Life Event__SepPart.2013,1,,,1 = experienced; 0 = did not experience
+bep,BEP15019,Separated From Partner,,Life Event,,SepPart,2014,Life Event__SepPart.2014,1,,,1 = experienced; 0 = did not experience
+bfp,BFP17319,Separated From Partner,,Life Event,,SepPart,2015,Life Event__SepPart.2015,1,,,1 = experienced; 0 = did not experience
