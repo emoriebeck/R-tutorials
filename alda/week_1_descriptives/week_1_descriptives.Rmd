@@ -16,6 +16,9 @@ editor_options:
   chunk_output_type: console
 ---
 
+<a href="https://raw.githubusercontent.com/emoriebeck/R-tutorials/master/ALDA/week_1_descriptives/week_1_descriptives.Rmd" download>Download .Rmd (won't work in Safari or IE)</a>  
+<a href="https://github.com/emoriebeck/R-tutorials/tree/master/ALDA/week_1_descriptives" target="_blank">See GitHub Repository</a>  
+
 # What Are Data?  
 Data are the core of everything that we do in statistical analysis. Data come in many forms, and I don't just mean `.csv`, `.xls`, `.sav`, etc. Data can be wide, long, documented, fragmented, messy, and about anything else that you can imagine.  
 
@@ -85,7 +88,7 @@ wd <- "https://github.com/emoriebeck/R-tutorials/blob/master/ALDA/week_1_descrip
 
 First, we need to load in the data. We're going to use three waves of data from the German Socioeconomic Panel Study, which is a longitudinal study of German households that has been conducted since 1984. We're going to use more recent data from three waves of personality data collected between 2005 and 2013.  
 
-*Note*: we will be using the teaching set of the GSOEP data set. I will not be pulling from the raw files as a result of this. I will also not be mirroring the format that you would usually load the GSOEP from because that is slightly more complicated and somethng we will return to in a later tutorial after we have more skills. I've left that code for now, but it won't make a lot of sense right now.  
+*Note*: we will be using the teaching set of the GSOEP data set. I will not be pulling from the raw files as a result of this. I will also not be mirroring the format that you would usually load the GSOEP from because that is slightly more complicated and somethng we will return to in a later tutorial on <a  href="emoriebeck.github.io/R-tutorials/purrr" target="_blank">`purrr`</a> after we have more skills. I've left that code for now, but it won't make a lot of sense right now.  
 
 ```{r data set up, eval = F}
 path <- "~/Box/network/other projects/PCLE Replication/data/sav_files"
