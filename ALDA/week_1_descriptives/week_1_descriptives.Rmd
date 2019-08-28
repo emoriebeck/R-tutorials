@@ -38,7 +38,7 @@ Below, we will step through each of these separately, setting ourselves up to (h
 ## Packages  
 Packages seems like the most basic step, but it is actually very important. <strong>ALWAYS LOAD YOUR PACKAGES IN A VERY INTENTIONAL ORDER AT THE BEGINNING OF YOUR SCRIPT.</strong> Package conflicts suck, so it needs to be shouted.  
 
-For this tutorial, we are going to quite simple. We will load the `psych` package for data descriptives, some options for cleaning and reverse coding, and some evaluations of our scales. The `plyr` package is the predecessor of the `dplyr` package, which is a core package of the `tidyverse`, which you will become quite familiar with in these tutorials. I like the plyr package because it contains a couple of functions (e.g. `mapvalues()`) that I find quite useful. Finally, we load the `tidyverse` package, which is actually a complilation of 8 packages. Some of these we will use today and some we will use in later tutorials. All are very useful and are arguably some of the most powerful tools R offers.  
+For this tutorial, we are going to quite simple. We will load the `psych` package for data descriptives, some options for cleaning and reverse coding, and some evaluations of our scales. The `plyr` package is the predecessor of the `dplyr` package, which is a core package of the `tidyverse`, which you will become quite familiar with in these tutorials. I like the `plyr` package because it contains a couple of functions (e.g. `mapvalues()`) that I find quite useful. Finally, we load the `tidyverse` package, which is actually a complilation of 8 packages. Some of these we will use today and some we will use in later tutorials. All are very useful and are arguably some of the most powerful tools `R` offers.  
 
 ```{r packages}
 # load packages
@@ -52,7 +52,7 @@ The second step is a codebook. Arguably, this is the first step because you shou
 
 In this case, we are going to using some data from the [German Socioeconomic Panel Study (GSOEP)](https://www.diw.de/en/soep/), which is an ongoing Panel Study in Germany. Note that these data are for teaching purposes only, shared under the license for the Comprehensive SOEP teaching dataset, which I, as a contracted SOEP user, can use for teaching purposes. These data represent select cases from  the full data set and should not be used for the purpose of publication. The full data are available for free at https://www.diw.de/en/diw_02.c.222829.en/access_and_ordering.html.   
 
-For this tutorial, I created the codebook for you, and included what I believe are the core columns you may need. Some of these columns will not be particularly helpful for this dataset. For example, the SAPA dataset is a single .RData file, while many of you likely work with datasets that are spread across many files. As a result, the "dataset" column of the codebook will have a single value ("SAPA").  
+For this tutorial, I created the codebook for you <a href="https://raw.githubusercontent.com/emoriebeck/R-tutorials/master/ALDA/week_1_descriptives/codebook.csv" download>(Download (won't work in Safari or IE))</a>, and included what I believe are the core columns you may need. Some of these columns may not be particularly helpful for every dataset. 
 
 Here are my core columns that are based on the original data:  
 1. **dataset**: this column indexes the **name** of the dataset that you will be pulling the data from. This is important because we will use this info later on (see `purrr` tutorial) to load and clean specific data files. Even if you don't have multiple data sets, I believe consistency is more important and suggest using this.  
@@ -88,7 +88,7 @@ wd <- "https://github.com/emoriebeck/R-tutorials/blob/master/ALDA/week_1_descrip
 
 First, we need to load in the data. We're going to use three waves of data from the German Socioeconomic Panel Study, which is a longitudinal study of German households that has been conducted since 1984. We're going to use more recent data from three waves of personality data collected between 2005 and 2013.  
 
-*Note*: we will be using the teaching set of the GSOEP data set. I will not be pulling from the raw files as a result of this. I will also not be mirroring the format that you would usually load the GSOEP from because that is slightly more complicated and somethng we will return to in a later tutorial on <a  href="emoriebeck.github.io/R-tutorials/purrr" target="_blank">`purrr`</a> after we have more skills. I've left that code for now, but it won't make a lot of sense right now.  
+*Note*: we will be using the teaching set of the GSOEP data set. I will not be pulling from the raw files as a result of this. I will also not be mirroring the format that you would usually load the GSOEP from because that is slightly more complicated and somethng we will return to in a later tutorial on <a  href="https://emoriebeck.github.io/R-tutorials/purrr/" target="_blank">`purrr` (link)</a> after we have more skills. I've left that code for now, but it won't make a lot of sense right now.  
 
 ```{r data set up, eval = F}
 path <- "~/Box/network/other projects/PCLE Replication/data/sav_files"
