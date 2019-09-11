@@ -110,7 +110,7 @@ change_fun <- function(file){
     unite(tmp, trait, num, sep = "_") %>%
     select(-scrap) %>%
     spread(tmp, value) %>%
-    write.csv(., file = sprintf("%s/%s", data_path, file))
+    write.csv(., file = sprintf("%s/%s", data_path, file), row.names = F)
 }
 
 tibble(file = list.files(data_path)) %>%
@@ -125,11 +125,8 @@ library(httr)
 req <- GET("https://api.github.com/repos/emoriebeck/R-tutorials/git/trees/master?recursive=1")
 stop_for_status(req)
 filelist <- unlist(lapply(content(req)$tree, "[", "path"), use.names = F)
-IDs <- grep("ALDA/week_3_purrr/data/example_1/", filelist, value = TRUE, fixed = TRUE)[1:10]
-```
+IDs <- grep("ALDA/week_3_purrr/data/example_1/", filelist, value = TRUE, fixed = TRUE)
 
-
-```{r, echo = F}
 data_path <- "https://github.com/emoriebeck/R-tutorials/raw/master"
 df1 <- tibble(ID = IDs) %>%
   mutate(data = map(ID, ~read_csv(sprintf("%s/%s", data_path, .))),
@@ -140,7 +137,7 @@ df1 <- tibble(ID = IDs) %>%
 
 ```{r, eval = F}
 data_path <- "~/Documents/R-tutorials/ALDA/week_3_purrr"
-tibble(ID = list.files(sprintf("%s/data/example_1", data_path))) %>%
+df1 <- tibble(ID = list.files(sprintf("%s/data/example_1", data_path))) %>%
   mutate(path = sprintf("%s/data/example_1/%s", data_path, ID),
          data = map(path, read_csv),
          ID = str_remove(ID, ".csv")) %>%
@@ -159,12 +156,11 @@ In this case, where all people have the same variables, it's easiest to just ren
 ```
 
 
-```{r}
-codebook <- sprintf("%s/ALDA/week_3_purrr/data/codebook_ex1.csv", data_path) %>% read_csv
+```{r, eval = F}
 old.names <- codebook$old_name
 new.names <- codebook$new_name
 data_path <- "~/Documents/R-tutorials/ALDA/week_3_purrr"
-tibble(ID = list.files(sprintf("%s/data/example_1", data_path))) %>%
+df1 <- tibble(ID = list.files(sprintf("%s/data/example_1", data_path))) %>%
   mutate(path = sprintf("%s/data/example_1/%s", data_path, ID),
          data = map(path, read_csv),
          ID = str_remove(ID, ".csv"))%>%
@@ -178,11 +174,41 @@ In some cases, participants may have different variables. This could be do to a 
 
 In this case, all participants have the same set of core variables but were randomly assigned to complete one additional scale.  
 
-```{r}
-
+```{r, echo = F, eval = F}
+data_path <- "~/Documents/Github/R-tutorials/ALDA/week_3_purrr/data/example_2"
+change_fun <- function(file){
+  remove <- sample(paste(c("E", "A", "C", "N", "O"), "_", sep = ""),1)
+  sprintf("%s/%s", data_path, file) %>%
+    read_csv() %>%
+    select(-contains(remove)) %>%
+    write.csv(., sprintf("%s/%s", data_path, file), row.names = F)
+}
+tibble(file = list.files(data_path)) %>%
+  mutate(map(file, change_fun))
 ```
 
+```{r, echo = F}
+req <- GET("https://api.github.com/repos/emoriebeck/R-tutorials/git/trees/master?recursive=1")
+stop_for_status(req)
+filelist <- unlist(lapply(content(req)$tree, "[", "path"), use.names = F)
+IDs <- grep("ALDA/week_3_purrr/data/example_2/", filelist, value = TRUE, fixed = TRUE)
 
+data_path <- "https://github.com/emoriebeck/R-tutorials/raw/master"
+df2 <- tibble(ID = IDs) %>%
+  mutate(data = map(ID, ~read_csv(sprintf("%s/%s", data_path, .))),
+         ID = str_remove(ID, ".csv"),
+         ID = str_remove(ID, "ALDA/week_3_purrr/data/example_2/")) %>%
+  unnest(data)
+```
+
+```{r, eval = F}
+data_path <- "~/Documents/R-tutorials/ALDA/week_3_purrr"
+df2 <- tibble(ID = list.files(sprintf("%s/data/example_2", data_path))) %>%
+  mutate(path = sprintf("%s/data/example_2/%s", data_path, ID),
+         data = map(path, read_csv),
+         ID = str_remove(ID, ".csv"))%>%
+  unnest(data) 
+```
 
 ## Multiple Waves, Same Variables (Example 3)  
 In some cases, instead of multiple files for each participant, we collect a single file for all participants across different waves (e.g. using Qualtrics). In this case, we need to index the files a little differently. Instead of reading in files for participants, we need to read in files for waves, which may be named in a variety of ways.  
@@ -192,12 +218,15 @@ Here, I'll start with a simple example of data that were well-managed and nicely
 These data come from a longitudinal study of personality. We have seven waves, and the variable names for all items are consistent across waves. In this case, our code is almost identical to reading in multiple files for each participant, except that now we have wave info and will need to toss out part of the file names at the end.    
 
 ```{r}
-old.names <- codebook$old.names
-new.names <- codebook$new.names
-data_path <- ""
-df3 <- tibble(wave = list.files(data_path)) %>%
-  mutate(data = map(ID, read_csv),
-         wave = as.numeric(str_extract_all(., "[0-9]"))) %>%
+codebook <- sprintf("%s/ALDA/week_3_purrr/data/codebook_ex3.csv", data_path) %>% read_csv
+old.names <- codebook$old_name
+new.names <- codebook$new_name
+
+df3 <- tibble(wave = paste("T", 1:7, sep = ""),
+              path = sprintf("%s/ALDA/week_3_purrr/data/example_3/%s.csv", data_path, wave)) %>%
+  mutate(data = map(path, read_csv),
+         wave = as.numeric(str_extract_all(wave, "[0-9]"))) %>%
+  select(-path) %>%
   unnest(data) %>%
   select(old.names) %>%
   setNames(new.names)
@@ -216,31 +245,70 @@ These data are the same as we used in the previous example except that I changed
 However, because of this, we'll need to use a function that take the year as input, so that we pull the correct variables from the codebook.  
 
 ```{r}
-read_fun <- function(wave){
-  old.names <- (codebook %>% filter(Year == year | Year == 0))$old_names
-  new.names <- (codebook %>% filter(Year == year | Year == 0))$new_names
+read_fun <- function(Wave){
+  old.names <- str_remove_all((codebook %>% filter(wave == "All" | wave == Wave))$old_name, "[ ]")
+  new.names <- (codebook %>% filter(wave == "All" | wave == Wave))$new_name
   
-  sprintf("%s/data/target_w%s.csv", wd, wave) %>%
-    read.csv() %>%
-    select(one_of(old.names)) %>%
+  sprintf("%s/ALDA/week_3_purrr/data/example_4/T%s.csv", data_path, Wave) %>%
+    read_csv() %>%
+    select(old.names) %>%
     setNames(new.names) %>%
-    gather(key = item, value = value)
+    gather(key = item, value = value, -SID)
 }
+
+codebook <- sprintf("%s/ALDA/week_3_purrr/data/codebook_ex4.csv", data_path) %>% read_csv
 
 df4 <- tibble(wave = 1:7) %>%
   mutate(data = map(wave, read_fun)) %>%
-  select(-wave) %>%
   unnest(data) %>%
+  unite(tmp, item, wave, sep = ".") %>%
+  spread(tmp, value) %>%
+  gather(key = item, value = value, -SID, -contains("Dem")) %>%
   separate(item, c("item", "wave"), sep = "[.]") %>%
-  spread(item, value)
+  spread(item, value) 
 ```
 
-## Multiple Waves, Multiple Files for Same Variables  
+## Multiple Waves, Multiple Files for Same Variables (Example 5)  
 In other cases, we may have multiple types of files for different waves. Across waves, those variables may be the same or different, but we'll focus on the case when we largely want the same variables. 
+
+```{r data set up, eval = F}
+path <- "~/Box/network/other projects/PCLE Replication/data/sav_files"
+ref <- sprintf("%s/cirdef.sav", path) %>% haven::read_sav(.) %>% select(hhnr, rgroup20)
+read_fun <- function(Year){
+  vars <- (codebook %>% filter(year == Year | year == 0))$old_name
+  set <- (codebook %>% filter(year == Year))$dataset[1]
+  sprintf("%s/%s.sav", path, set) %>% haven::read_sav(.) %>%
+    full_join(ref) %>%
+    filter(rgroup20 > 10) %>%
+    select(one_of(vars)) %>%
+    write.csv(., file = sprintf("~/Documents/Github/R-tutorials/ALDA/week_3_purrr/data/example_6/%s.csv", set), row.names = F)
+}
+
+vars <- (codebook %>% filter(year == 0))$old_name
+sprintf("%s/ppfad.sav", path) %>% 
+  haven::read_sav(.) %>%
+  full_join(ref) %>%
+  filter(rgroup20 > 10) %>%
+  select(vars) %>%
+  write.csv(., file = "~/Documents/Github/R-tutorials/ALDA/week_3_purrr/data/example_6/dem.csv", row.names = F)
+  
+  
+tibble(year = c(2005:2015)) %>%
+  mutate(data = map(year, read_fun)) %>%
+  select(-year) %>% 
+  unnest(data) %>%
+  distinct() %>% 
+  filter(!is.na(value)) %>%
+  spread(key = item, value = value) %>%
+  left_join(dem) %>%
+  write.csv(., file = "~/Documents/Github/R-tutorials/ALDA/week_1_descriptives/data/week_1_data.csv", row.names = F)
+```
+
+
 
 # Running Models  
 Another really powerful feature of `purrr` is keeping your data, models, tables, plots, etc all conveniently indexed together. Often we need to do this for multiple DV's or predictors, and you may end up with an environment that looks something like `E_fit1`, `A_fit1`, `E_fit2`, `A_fit2` and so on. There's nothing wrong with this. But eventually you'll want to pull out coefficients, plot results, etc., and it's easy to make a copy and paste error or name different types of objects inconsistently, which can be difficult both for future you or someone else using your code.  
 
 Before we can learn how to use `purrr` for this, we need to understand what a nested data frame is. If you've ever worked with a list in R, you are halfway there. Basically a nested data frame takes the normal data frame you are probably familiar with and adds some new features. It still has columns, rows, and cells, but what makes up those cells isn't restrictred to numbers, strings, or logicals. Instead, you can put essentially anything you want: lists, models, data frames, plots, etc! 
 
-If this sounds scary, it will hopefully become clearer if we use our read in data from above to run, table, and plot some basic longitudinal models of our data. 
+If this sounds scary, it will hopefully become clearer if we use our read in data from above to run, table, and plot some basic longitudinal models of our data.  
