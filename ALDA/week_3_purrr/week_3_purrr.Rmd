@@ -312,3 +312,23 @@ Another really powerful feature of `purrr` is keeping your data, models, tables,
 Before we can learn how to use `purrr` for this, we need to understand what a nested data frame is. If you've ever worked with a list in R, you are halfway there. Basically a nested data frame takes the normal data frame you are probably familiar with and adds some new features. It still has columns, rows, and cells, but what makes up those cells isn't restrictred to numbers, strings, or logicals. Instead, you can put essentially anything you want: lists, models, data frames, plots, etc! 
 
 If this sounds scary, it will hopefully become clearer if we use our read in data from above to run, table, and plot some basic longitudinal models of our data.  
+
+```{r}
+codebook <- sprintf("%s/ALDA/week_3_purrr/data/codebook_ex6.csv", data_path) %>%
+  read_csv %>%
+  mutate(old_name = str_to_lower(old_name))
+
+read_fun <- function(Year){
+  old.names <- (codebook %>% filter(year == Year | year == 0))$old_name
+  new.names <- (codebook %>% filter(year == Year | year == 0))$new_name
+  set <- (codebook %>% filter(year == Year))$dataset[1]
+  sprintf("%s/ALDA/week_3_purrr/data/example_6/%s.csv", data_path, set) %>%
+    read_csv %>%
+    select(old.names) %>%
+    setNames(new.names)
+}
+
+tibble(year = 2005:2015) %>%
+  mutate(data = map(year, read_fun))
+```
+
