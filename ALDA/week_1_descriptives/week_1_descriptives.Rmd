@@ -116,7 +116,7 @@ tibble(year = c(2005:2015)) %>%
   filter(!is.na(value)) %>%
   spread(key = item, value = value) %>%
   left_join(dem) %>%
-  write.csv(., file = "~/Documents/Github/R-tutorials/ALDA/week_1_descriptives/data/wdeek_1_data.csv", row.names = F)
+  write.csv(., file = "~/Documents/Github/R-tutorials/ALDA/week_1_descriptives/data/week_1_data.csv", row.names = F)
 ```
 
 This code below shows how I would read in and rename a wide-format data set using the codebook I created.  
@@ -166,7 +166,6 @@ Before we can do that, though, we need to restructure the data a bit in order to
 ```
 
 ## Create Composites   
-
 
 Now that we have reverse coded our items, we can create composites. 
 
