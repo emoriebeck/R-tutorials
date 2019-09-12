@@ -596,3 +596,63 @@ tab %>%
                      "Conscientiousness" = 2, "Neuroticism" = 2, "Openness" = 2))
 ```
 
+## Fitting Conditional Models (Example 7)  
+
+### Clean Life Event Data  
+```{r}
+(df7_le <- df6 %>%
+  select(Procedural__SID, contains("Life")) %>%
+  mutate_all(~ifelse(. < 0, 0, .)) %>%
+  gather(key = item, value = value, -Procedural__SID, na.rm = T) %>%
+  mutate(item = str_remove(item, "Life Event__")) %>%
+  separate(item, c("Event", "year"), sep = "[.]")  %>%
+  group_by(Procedural__SID, Event) %>%
+  summarize(le_value = sum(value, na.rm = T),
+            le_value = ifelse(le_value > 1, 1, le_value),
+            le_value = factor(le_value, levels = c(0 , 1))) %>%
+  ungroup())
+```
+
+### Merge the Data Frames  
+```{r}
+(df7_long <- df6_long %>% left_join(df7_le))
+```
+
+### Run the Conditional Models  
+```{r}
+df7_nested <- df7_long %>%
+  group_by(trait, Event) %>%
+  nest() %>%
+  mutate(fit3 = map(data, ~lmer(value ~ 1 + wave*le_value + (wave | Procedural__SID), data = .)),
+         tidy = map(fit3, tidy))
+```
+
+```{r, echo = F}
+pred_fun <- function(m){
+  set.seed(4)
+  subs1 <- sample((m@frame %>% filter(le_value == 0))$Procedural__SID, 25)
+  subs2 <- sample((m@frame %>% filter(le_value == 1))$Procedural__SID, 25)
+  subs <- c(subs1, subs2)
+  crossing(wave = seq(0, 2, .5), 
+           Procedural__SID = m@frame$Procedural__SID) %>%
+    left_join(m@frame %>% tbl_df %>% select(Procedural__SID, le_value)) %>%
+    filter(Procedural__SID %in% subs) %>%
+    distinct() %>%
+    mutate(pred = predict(m, newdata = .))
+}
+
+df7_nested %>%
+  mutate(pred = map(fit3, pred_fun)) %>%
+  select(trait, Event, pred) %>%
+  unnest(pred) %>%
+  mutate(Procedural__SID = as.character(Procedural__SID)) %>%
+  ggplot(aes(x = wave, y = pred, color = le_value, group = Procedural__SID)) + 
+    scale_x_continuous(limits = c(0,2), breaks = seq(0,2,1)) +
+    scale_color_manual(values = c("black", "blue")) +
+    geom_line(alpha = .5, size = .25) +
+    labs(x = "Wave", y =  "Predicted Personality Score") +
+    facet_grid(trait ~ Event) +
+    theme_classic() +
+    theme(legend.position = "bottom")
+```
+
