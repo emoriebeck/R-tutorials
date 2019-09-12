@@ -1,5 +1,5 @@
 ---
-title: "purrr Tutorial"
+title: "`purrr` Tutorial"
 subtitle: "Applied Longitudinal Data Analysis"
 author: "Emorie D Beck"
 date: "`r Sys.setlocale('LC_TIME', 'C'); format(Sys.time(), '%d\\\\. %B %Y')`"
@@ -159,12 +159,12 @@ df1 <- tibble(ID = IDs) %>%
 
 ```{r read data ex1, eval = F}
 data_path <- "~/Documents/week_3_purrr"
-df1 <- tibble(ID = list.files(sprintf("%s/data/example_1", data_path))) %>%
+(df1 <- tibble(ID = list.files(sprintf("%s/data/example_1", data_path))) %>%
   mutate(path = sprintf("%s/data/example_1/%s", data_path, ID),
          data = map(path, read_csv),
          ID = str_remove(ID, ".csv")) %>%
   unnest(data) %>%
-  select(-path)
+  select(-path))
 ```
 
 The code above creates a list of ID's from the data path (files named for each person), reads the data in using the `map()` function from `purrr`, removes the ".csv" from the ID variable, then unnests the data, resulting in a data frame for each person.
@@ -182,13 +182,13 @@ data_path <- "https://github.com/emoriebeck/R-tutorials/raw/master"
 ```{r read data complex ex1, eval = F}
 old.names <- codebook$old_name
 new.names <- codebook$new_name
-df1 <- tibble(ID = list.files(sprintf("%s/data/example_1", data_path))) %>%
+(df1 <- tibble(ID = list.files(sprintf("%s/data/example_1", data_path))) %>%
   mutate(path = sprintf("%s/data/example_1/%s", data_path, ID),
          data = map(path, read_csv),
          ID = str_remove(ID, ".csv"))%>%
   unnest(data) %>%
   select(ID, old.names) %>%
-  setNames(c("ID", new.names))
+  setNames(c("ID", new.names)))
 ```
 
 ## Many Subjects, Different Variables (Example 2)  
@@ -216,19 +216,19 @@ filelist <- unlist(lapply(content(req)$tree, "[", "path"), use.names = F)
 IDs <- grep("ALDA/week_3_purrr/data/example_2/", filelist, value = TRUE, fixed = TRUE)
 
 data_path <- "https://github.com/emoriebeck/R-tutorials/raw/master"
-df2 <- tibble(ID = IDs) %>%
+(df2 <- tibble(ID = IDs) %>%
   mutate(data = map(ID, ~read_csv(sprintf("%s/%s", data_path, .))),
          ID = str_remove(ID, ".csv"),
          ID = str_remove(ID, "ALDA/week_3_purrr/data/example_2/")) %>%
-  unnest(data)
+  unnest(data))
 ```
 
 ```{r read data ex2, eval = F}
-df2 <- tibble(ID = list.files(sprintf("%s/data/example_2", data_path))) %>%
+(df2 <- tibble(ID = list.files(sprintf("%s/data/example_2", data_path))) %>%
   mutate(path = sprintf("%s/data/example_2/%s", data_path, ID),
          data = map(path, read_csv),
          ID = str_remove(ID, ".csv"))%>%
-  unnest(data) 
+  unnest(data) )
 ```
 
 ## Multiple Waves, Same Variables (Example 3)  
@@ -243,14 +243,14 @@ codebook <- sprintf("%s/ALDA/week_3_purrr/data/codebook_ex3.csv", data_path) %>%
 old.names <- str_remove_all(codebook$old_name, "[ ]")
 new.names <- codebook$new_name
 
-df3 <- tibble(wave = paste("T", 1:7, sep = ""),
+(df3 <- tibble(wave = paste("T", 1:7, sep = ""),
               path = sprintf("%s/ALDA/week_3_purrr/data/example_3/%s.csv", data_path, wave)) %>%
   mutate(data = map(path, read_csv),
          wave = as.numeric(str_extract_all(wave, "[0-9]"))) %>%
   select(-path) %>%
   unnest(data) %>%
   select(old.names) %>%
-  setNames(new.names)
+  setNames(new.names))
 ```
 
 The only change from the code for reading in multiple files for participants is that we have "wave" as a variable instead of "ID" and we use the `str_extract_all()` function from the `stringr` package (part of `tidyverse`) to get rid of everything except the numeric wave value. 
@@ -279,14 +279,14 @@ read_fun <- function(Wave){
 
 codebook <- sprintf("%s/ALDA/week_3_purrr/data/codebook_ex4.csv", data_path) %>% read_csv
 
-df4 <- tibble(wave = 1:7) %>%
+(df4 <- tibble(wave = 1:7) %>%
   mutate(data = map(wave, read_fun)) %>%
   unnest(data) %>%
   unite(tmp, item, wave, sep = ".") %>%
   spread(tmp, value) %>%
   gather(key = item, value = value, -SID, -contains("Dem")) %>%
   separate(item, c("item", "wave"), sep = "[.]") %>%
-  spread(item, value) 
+  spread(item, value) )
 ```
 
 ## Multiple Waves, Multiple Files for Same Variables (Example 5)  
@@ -332,9 +332,9 @@ If this sounds scary, it will hopefully become clearer if we use our read in dat
 
 ## Read in Data  
 ```{r read data ex6}
-codebook <- sprintf("%s/ALDA/week_3_purrr/data/codebook_ex6.csv", data_path) %>%
+(codebook <- sprintf("%s/ALDA/week_3_purrr/data/codebook_ex6.csv", data_path) %>%
   read_csv %>%
-  mutate(old_name = str_to_lower(old_name))
+  mutate(old_name = str_to_lower(old_name)))
 
 read_fun <- function(Year){
   old.names <- (codebook %>% filter(year == Year | year == 0))$old_name
@@ -595,7 +595,4 @@ tab %>%
   add_header_above(c(" " = 2, "Extraversion" = 2, "Agreeablness" = 2, 
                      "Conscientiousness" = 2, "Neuroticism" = 2, "Openness" = 2))
 ```
-
-
-
 
