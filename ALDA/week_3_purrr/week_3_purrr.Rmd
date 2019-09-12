@@ -12,7 +12,7 @@ output:
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE, message = F, warning = F, error = F)
 ```
 
 <a href="https://raw.githubusercontent.com/emoriebeck/R-tutorials/master/purrr/purrr_tutorial.Rmd" download>Download .Rmd (won't work in Safari or IE)</a>  
@@ -34,7 +34,8 @@ It's also incredibly useful. Anytime you have to repeat some sort of action many
 library(psych)
 library(knitr)
 library(kableExtra)
-library(gridExtra)
+library(lme4)
+library(broom.mixed)
 library(plyr)
 library(tidyverse)
 ```
@@ -219,7 +220,7 @@ These data come from a longitudinal study of personality. We have seven waves, a
 
 ```{r}
 codebook <- sprintf("%s/ALDA/week_3_purrr/data/codebook_ex3.csv", data_path) %>% read_csv
-old.names <- codebook$old_name
+old.names <- str_remove_all(codebook$old_name, "[ ]")
 new.names <- codebook$new_name
 
 df3 <- tibble(wave = paste("T", 1:7, sep = ""),
@@ -272,6 +273,9 @@ df4 <- tibble(wave = 1:7) %>%
 In other cases, we may have multiple types of files for different waves. Across waves, those variables may be the same or different, but we'll focus on the case when we largely want the same variables. 
 
 ```{r data set up, eval = F}
+codebook <- sprintf("%s/ALDA/week_3_purrr/data/codebook_ex6.csv", data_path) %>%
+  read_csv %>%
+  mutate(old_name = str_to_lower(old_name))
 path <- "~/Box/network/other projects/PCLE Replication/data/sav_files"
 ref <- sprintf("%s/cirdef.sav", path) %>% haven::read_sav(.) %>% select(hhnr, rgroup20)
 read_fun <- function(Year){
@@ -294,14 +298,7 @@ sprintf("%s/ppfad.sav", path) %>%
   
   
 tibble(year = c(2005:2015)) %>%
-  mutate(data = map(year, read_fun)) %>%
-  select(-year) %>% 
-  unnest(data) %>%
-  distinct() %>% 
-  filter(!is.na(value)) %>%
-  spread(key = item, value = value) %>%
-  left_join(dem) %>%
-  write.csv(., file = "~/Documents/Github/R-tutorials/ALDA/week_1_descriptives/data/week_1_data.csv", row.names = F)
+  mutate(data = map(year, read_fun))
 ```
 
 
@@ -313,6 +310,7 @@ Before we can learn how to use `purrr` for this, we need to understand what a ne
 
 If this sounds scary, it will hopefully become clearer if we use our read in data from above to run, table, and plot some basic longitudinal models of our data.  
 
+## Read in Data  
 ```{r}
 codebook <- sprintf("%s/ALDA/week_3_purrr/data/codebook_ex6.csv", data_path) %>%
   read_csv %>%
@@ -328,7 +326,186 @@ read_fun <- function(Year){
     setNames(new.names)
 }
 
-tibble(year = 2005:2015) %>%
-  mutate(data = map(year, read_fun))
+(df6 <- tibble(year = 2005:2015) %>%
+  mutate(data = map(year, read_fun)) %>%
+  select(-year) %>%
+  unnest(data) )
 ```
+
+## Clean Data  
+
+Now the data are all loaded in and have been given informative variable names, but we still need to do some data cleaning for the personality data.  
+
+We'll start by selecting only the personality variables and reverse-scoring them. Then we'll create composites. To do so, we'll again use our codebook.  
+
+```{r}
+# reverse code
+(df6_long <- df6 %>%
+  select(Procedural__SID, contains("Big 5")) %>%
+  gather(key = item, value = value, -Procedural__SID, na.rm = T) %>%
+  left_join(codebook %>% select(item = new_name, reverse, mini, maxi)) %>%
+  mutate(value = ifelse(reverse == 1, value, 
+                        reverse.code(-1, value, mini = mini, maxi = maxi))))
+
+# create compoistes  
+(df6_long <- df6_long %>%
+  mutate(item = str_remove(item, "Big 5__")) %>%
+  separate(item, c("trait", "item"), sep = "_") %>%
+  separate(item, c("item", "year"), sep = "[.]") %>%
+  group_by(Procedural__SID, trait, year) %>%
+  summarize(value = mean(value, na.rm = T)))
+```
+
+## Coding Time  
+
+It's important to remember how we code time. There are several ways we can do it. For now, for simplicity, we will create a new wave variable where 2005 = 0, 2009 = 1, and 2013 = 3, but we could make a lot of other choices depending on our goals.  
+
+```{r}
+(df6_long <- df6_long %>%
+  mutate(wave = as.numeric(mapvalues(year, from = seq(2005, 2013, 4), to = seq(0, 2, 1)))))
+```
+
+It's going to get mad later when I run growth models if I keep people with only one wave, so we're going to remove them now.  
+
+```{r}
+(df6_long <- df6_long %>%
+  group_by(trait, Procedural__SID) %>%
+  filter(n() > 1) %>%
+  ungroup())
+```
+
+
+## Fit Unconditional Models  
+Now, here we could run separate unconditional growth models for each of the Big 5 like this: 
+
+```{r}
+fit0_E <- lmer(value ~ 1 + (1 | Procedural__SID), data = df6_long %>% filter(trait == "E"))
+summary(fit0_E)
+```
+
+But this would be tedious and prone to error. So instead we will use list columns to do it. We'll start by using the `group_by()` and `nest()` functions from `dplyr` and `tidyr` to put the data for each trait into a cell of our data frame:  
+
+```{r}
+(df6_nested <- df6_long %>%
+  group_by(trait) %>%
+  nest())
+```
+
+Now, our data frame is 5 x 2, with the elements in the second column each containing the data frame that corresponds to that trait. This makes it really easy to run our models using the `map()` family of unctions from `purrr`.  
+
+Below, we will add a new column to our data frame that will contain the unconditional model  for each trait. 
+
+```{r}
+(df6_nested <- df6_nested %>%
+  mutate(fit0 = map(data, ~lmer(value ~ 1 + (1 | Procedural__SID), data = .))))
+```
+
+## ICC  
+
+Now we can see we have a new list column in our data frame called fit0 that contains an  S4 class lmerMod, which simply means your growth model. If you remember, what we're often intersted in with the unconditional model is the ICC (relative between v. within variance), so let's extract that from the models using the `ICC()` function from the `reghelper` package. In this case, we will use a version of `map()` called `map_dbl` because we want our result to be a regular numeric column, not a list column. 
+
+```{r}
+(df6_nested <- df6_nested %>%
+  mutate(ICC = map_dbl(fit0, reghelper::ICC)))
+```
+
+## Fit Growth Models  
+
+What we're starting to see is that we still have a tidy working environment, but we're still holding onto a lot of info that we can access with relative ease.  
+
+But before we get to things like pulling info from our models, let's go ahead and run our basic growth model with and without a random slope.  
+
+```{r}
+(df6_nested <- df6_nested %>%
+  mutate(fit1 = map(data, ~lmer(value ~ 1 + wave + (1 | Procedural__SID), data = .)),
+         fit2 = map(data, ~lmer(value ~ 1 + wave + (wave | Procedural__SID), data = .))))
+```
+
+Our data frame has expanded to have two more columns.  
+
+## Model Comparisons
+
+To decide if we should have a random slope, we typically do nested model comparisons. We can do that here, too. Here, we need to use both fit1 and fit2, so we'll use the `map2()` function from `purrr` to take 2 inputs and use the `anova()` function to compare them.  
+
+```{r}
+(df6_nested <- df6_nested %>%
+  mutate(anova1 = map2(fit1, fit2, anova)))
+```
+
+To see the results, we can do the following: 
+
+```{r}
+df6_nested$anova1
+```
+
+## Tabling Values
+
+Looks like we have enough slope variance for all traits but Agreeableness to proceed with the random slope models. We're going to proceed with the random slope models for all traits for consistency.  
+
+The next thing we want to do is actually examine the model coefficients. To do that, I prefer to use the `tidy()` function from the `broom.mixed` package.  
+
+```{r}
+(df6_nested <- df6_nested %>%
+  mutate(tidy = map(fit2, ~tidy(., conf.int = T))))
+```
+
+Now we have a new column called tidy that contains a data frame. But we want to be able to see those values. This is where `purrr` will really shine once again, especially when coupled with the `unnest()` from `tidyr`.  Watch:  
+
+```{r}
+df6_nested %>%
+  select(trait, tidy) %>%
+  unnest(tidy)
+```
+
+This is fine, but kind of ugly (I can't publish this table, and it should be clear right now that I do not like copying and pasting). 
+
+The code below is going to clean this up a bit. See if you can figure out what's going on: 
+
+```{r}
+terms <- tibble(old = c("(Intercept)", "wave", "sd__(Intercept)", "sd__wave",
+                        "cor__(Intercept).wave", "sd__Observation"),
+                new = c("Intercept", "Slope", "SD Intercept", "SD Slope", "Intercept-Slope Correlation", "SD Residual"))
+
+(tab <- df6_nested %>%
+  select(trait, tidy) %>%
+  unnest(tidy) %>% 
+  mutate(term = mapvalues(term, from = terms$old, to = terms$new)) %>%
+  select(trait, effect, term, estimate, conf.low, conf.high))
+```
+
+We extracted some elements, but we still aren't quite ready for publication. Let's do some reshaping so that we have different rows for terms and different columns for traits.  
+
+```{r}
+levs <- paste(rep(c("E", "A", "C", "N", "O"), each = 2), rep(c("b", "CI"), 5), sep = ".")
+(tab <- tab %>%
+  mutate(sig = ifelse(sign(conf.low) == sign(conf.high), "sig", "ns")) %>%
+  mutate_at(vars(estimate:conf.high), ~sprintf("%.2f", .)) %>%
+  mutate_at(vars(conf.low, conf.high), ~ifelse(. == "NA", "", .)) %>%
+  mutate(CI = ifelse(effect == "fixed", sprintf("[%s, %s]", conf.low, conf.high), "")) %>%
+  mutate_at(vars(estimate, CI), ~ifelse(is.na(sig), .,
+              ifelse(sig == "sig", sprintf("<strong>%s</strong>", .), .))) %>%
+  select(trait:term, b = estimate, CI) %>%
+  gather(key = est, value = value, b, CI) %>%
+  unite(tmp, trait, est, sep = ".") %>%
+  mutate(tmp = factor(tmp, levels = levs)) %>%
+  spread(tmp, value))
+```
+
+Now we have it formatted, but let's make it pretty using the `kable()` function  from the `knitr` package and the `kableExtra` package.  
+
+```{r}
+tab %>%
+  mutate(effect = mapvalues(effect, c("fixed", "ran_pars"), c("Fixed", "Random"))) %>%
+  kable(., "html", escape = F, booktabs = T, 
+        col.names = c("Effect", "Term", rep(c("b", "CI"), times = 5)),
+        align = c("r", "r", rep("c",10)),
+        caption = "Growth Model Terms for the Big 5") %>%
+  kable_styling(full_width = F) %>%
+  collapse_rows(1, valign = "top") %>%
+  add_header_above(c(" " = 2, "Extraversion" = 2, "Agreeablness" = 2, 
+                     "Conscientiousness" = 2, "Neuroticism" = 2, "Openness" = 2))
+```
+
+
+
 
