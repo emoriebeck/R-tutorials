@@ -349,7 +349,7 @@ read_fun <- function(Year){
 (df6 <- tibble(year = 2005:2015) %>%
   mutate(data = map(year, read_fun)) %>%
   select(-year) %>%
-  unnest(data) )
+  unnest(data))
 ```
 
 ## Clean Data  
