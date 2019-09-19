@@ -22,8 +22,12 @@ knitr::opts_chunk$set(echo = TRUE, message = F, warning = F, error = F)
 <a href="https://raw.githubusercontent.com/emoriebeck/R-tutorials/master/ALDA/week_4_plotting/week_4_plotting.Rmd" download>Download .Rmd (won't work in Safari or IE)</a>  
 <a href="https://github.com/emoriebeck/R-tutorials/tree/master/ALDA/week_4_plotting" target="_blank">See GitHub Repository</a>  
 
+For a much more exhaustive tutorial, see <a href="https://raw.githubusercontent.com/emoriebeck/R-tutorials/master/mlm/Conditional_Models_doc.Rmd" download>this</a>.  
+
 # Workspace  
 ## Packages  
+
+First let's load in our packages. We're going to load in a couple of extras (`brms` and `tidybayes`) that we haven't used before. These will let us make some pretty plots later. 
 ```{r packages}
 library(psych)
 library(knitr)
@@ -39,15 +43,32 @@ data_path <- "https://github.com/emoriebeck/R-tutorials/raw/master"
 ```
 
 ## Read in Data  
+The National Longitudinal Study of Youths 1979 Child and Young Adult Sample (NLSYCYA) is a longitudinal study conducted by the National Bureau of Labor Statistics. The sample includes the children of the original 1979 sample, of which we will use a small subset. Here, we are going to use a subset of the more than 11,000 variables available that include the following:
+
+Item Name   | Description                   | Time-Varying?
+----------- | ----------------------------- | -------------
+PROC_CID    | Participant ID                | No  
+Dem_DOB     | Year of Date of Birth         | No
+groups      | Jail, Community Service, None | No
+DemPWeight  | Weight Percentile at age 10   | No
+age         | Age of participant            | Yes
+Year        | Year of Survey                | Yes
+age0        | Age of participant (centered) | Yes
+SensSeek    | Sensation-Seeking Composite   | Yes
+CESD        | CESD Depression Composite     | Yes
+
 ```{r read data ex6}
 load(url(sprintf("%s/ALDA/week_4_plotting/data/sample.RData", data_path)))
 
 sample_dat
 ```
 
-## Restructure Data  
 
-To run our models using `purrr`, we need to restrucutre the data to long. While we're at it, we need to create a time variable centered at zero, so we can interpret our moderators later. 
+## Restructure Data  
+These data are already largely cleaned as that is not our focus today. We just need to do a little bit of restructuring.  
+
+To run our models using `purrr`, we need to restrucutre the data to long. While we're at it, we need to create a time variable centered at zero, so we can interpret our moderators later.  
+
 ```{r}
 (df1_long <- sample_dat %>%
   gather(key = trait, value = value, CESD, SensSeek, na.rm = T) %>%
@@ -68,18 +89,18 @@ we will use list columns to do it. We'll start by using the `group_by()` and `ne
   nest())
 ```
 
-Now, our data frame is 5 x 2, with the elements in the second column each containing the data frame that corresponds to that trait. This makes it really easy to run our models using the `map()` family of unctions from `purrr`.  
+Now, our data frame is 2 x 2, with the elements in the second column each containing the data frame that corresponds to that trait. This makes it really easy to run our models using the `map()` family of unctions from `purrr`.  
 
 Before we fit the full growth model, we will first fit the unconditional model. Below, we will add a new column to our data frame that will contain the unconditional model for each trait. 
 
 In this case the model will be in the form of: 
-\begin{itemize}
-  \item \textbf{Level 1:} $Y_{ij} = \beta_{0j} + \varepsilon{ij}$
-  \item \textbf{Level 2:} 
-    \begin{itemize} 
-      \item $\beta_{0j} = \gamma_{00} + U_{0j}$
-    \end{itemize}
-\end{itemize}
+<ul>
+  <li> <strong>Level 1:</strong> $Y_{ij} = \beta_{0j} + \varepsilon{ij}$ </li>
+  <li> <strong>Level 2:</strong>  </li>
+    <ul> 
+      <li> $\beta_{0j} = \gamma_{00} + U_{0j}$ </li>
+    </ul>
+</ul>
 
 ```{r fit0 ex6}
 (df1_nested <- df1_nested %>%
@@ -91,14 +112,14 @@ Now we can see we have a new list column in our data frame called fit0 that cont
 Now, moving on to the growth model: 
 
 In this case the model will be in the form of: 
-\begin{itemize}
-  \item \textbf{Level 1:} $Y_{ij} = \beta_{0j} + \beta_{1j}*time_{ij} + \varepsilon{ij}$
-  \item \textbf{Level 2:} 
-    \begin{itemize} 
-      \item $\beta_{0j} = \gamma_{00} + U_{0j}$
-      \item $\beta_{1j} = \gamma_{10} + U_{1j}$
-    \end{itemize}
-\end{itemize}
+<ul>
+  <li> <strong>Level 1:</strong> $Y_{ij} = \beta_{0j} + \beta_{1j}*time_{ij} + \varepsilon{ij}$ </li>
+  <li> <strong>Level 2:</strong></li> 
+    <ul>
+      <li> $\beta_{0j} = \gamma_{00} + U_{0j}$ </li>
+      <li> $\beta_{1j} = \gamma_{10} + U_{1j}$ </li>
+    </ul>
+</ul>
 
 ```{r fit12 ex6}
 (df1_nested <- df1_nested %>%
@@ -107,14 +128,9 @@ In this case the model will be in the form of:
 
 Now that we've run our model, we are ready to plot the results.  
 
-To do so, we'll write a short function that will get the predicted values both for group level effects, as well as for individual-level estimates.  
+To do so, we'll write a short function that will get the predicted values both for group level effects, as well as for individual-level estimates. There's also a hidden function for getting standard errors of our pointwise estimates that we'll use to create confidence bands in our plots. Don't worry about that.  
 
 ```{r, echo = F}
-frame <- crossing(Intercept = 1, 
-         age0 = seq(0,8,1),
-         groups = c(0,1)) %>%
-  mutate(Int = age0*groups)
-
 pv_fun <- function(frame, m){
   nvar <- nrow(vcov(m)) # # of variables
   varnames <- str_replace_all(colnames(vcov(m)), "[()]", "") # names for vcov mat
@@ -127,8 +143,10 @@ pv_fun <- function(frame, m){
 }
 ```
 
-
+## Predicted Values  
+Now we'll use the predict function to get predicted values and the function I created to get pointwise standard errors for the fixed effects.    
 ```{r}
+# function to get fixed effects
 fixed_pred_fun <- function(m){
   frame <- tibble(Intercept = 1, age0 = seq(0, 8, .1)) %>%
     mutate(fixed_pred = predict(m, newdata = ., re.form = NA),
@@ -137,6 +155,7 @@ fixed_pred_fun <- function(m){
   frame %>% select(-Intercept)
 }
 
+# function to get random effects predictions  
 ran_pred_fun <- function(m){
   crossing(age0 = seq(0, 8, 1),
          PROC_CID = m@frame$PROC_CID) %>%
@@ -144,12 +163,15 @@ ran_pred_fun <- function(m){
            age = age0 + 16)
 }
 
+# get fixed and random efects, and also combine them.
 (df1_nested <- df1_nested %>%
   mutate(fixed_pred = map(fit2, fixed_pred_fun),
          ran_pred = map(fit2, ran_pred_fun),
          combined_pred = map2(fixed_pred, ran_pred, full_join)))
 ```
 
+## Plot  
+Now let's 
 ```{r}
 df1_nested %>%
   select(trait, combined_pred) %>%
@@ -209,29 +231,29 @@ df1_nested %>%
 ```
 
 
-## Two-Level Categorical Moderator  
+# Two-Level Categorical Moderator  
 
 Let's start with the basic syntax:  
 
-\begin{itemize}
-  \item \textbf{Level 1:} $Y_{ij} = \beta_{0j} + \beta_{1j}*time_{1j} + \varepsilon{ij}$
-  \item \textbf{Level 2:} 
-    \begin{itemize} 
-      \item $\beta_{0j} = \gamma_{00} + \gamma_{01}*X_{2j} + U_{0j}$
-      \item $\beta_{1j} = \gamma_{10} + \gamma_{11}*X_{2j} + U_{1j}$
-    \end{itemize}
-\end{itemize}
+<ul>
+  <li> <strong>Level 1:</strong> $Y_{ij} = \beta_{0j} + \beta_{1j}*time_{1j} + \varepsilon{ij}$</li>
+  <li> <strong>Level 2:</strong> </li>
+    <ul> 
+      <li> $\beta_{0j} = \gamma_{00} + \gamma_{01}*X_{2j} + U_{0j}$</li>
+      <li> $\beta_{1j} = \gamma_{10} + \gamma_{11}*X_{2j} + U_{1j}$</li>
+    </ul>
+</ul>
 
 Now let's swap that out for a 2 group sample from the present data:  
 
-\begin{itemize}
-  \item \textbf{Level 1:} $Y_{ij} = \beta_{0j} + \beta_{1j}*age0_{ij} + \varepsilon{ij}$
-  \item \textbf{Level 2:} 
-    \begin{itemize} 
-      \item $\beta_{0j} = \gamma_{00} + \gamma_{01}*groupsNone + U_{0j}$
-      \item $\beta_{1j} = \gamma_{10} + \gamma_{11}*groupsNone + U_{1j}$
-    \end{itemize}
-\end{itemize}
+<ul>
+  <li> <strong>Level 1:</strong> $Y_{ij} = \beta_{0j} + \beta_{1j}*age0_{ij} + \varepsilon{ij}$</li>
+  <li> <strong>Level 2:</strong> </li>
+    <ul> 
+      <li> $\beta_{0j} = \gamma_{00} + \gamma_{01}*groupsNone + U_{0j}$</li>
+      <li> $\beta_{1j} = \gamma_{10} + \gamma_{11}*groupsNone + U_{1j}$</li>
+    </ul>
+</ul>
 
 Variable  | D1  
 --------- | ---
@@ -304,14 +326,14 @@ df1_nested %>%
 ```
 
 ## Three-Level Categorical Moderator  
-\begin{itemize}
-  \item \textbf{Level 1:} $Y_{ij} = \beta_{0j} + \beta_{1j}*age0_{ij} + \varepsilon{ij}$
-  \item \textbf{Level 2:} 
-    \begin{itemize} 
-      \item $\beta_{0j} = \gamma_{00} + \gamma_{01}*D1 + \gamma_{02}*D2 + U_{0j}$
-      \item $\beta_{1j} = \gamma_{10} + \gamma_{11}*D1 + \gamma_{12}*D2 + U_{1j}$
-    \end{itemize}
-\end{itemize}
+<ul>
+  <li> <strong>Level 1:</strong> $Y_{ij} = \beta_{0j} + \beta_{1j}*age0_{ij} + \varepsilon{ij}$</li>
+  <li> <strong>Level 2:</strong> </li>
+    <ul> 
+      <li> $\beta_{0j} = \gamma_{00} + \gamma_{01}*D1 + \gamma_{02}*D2 + U_{0j}$</li>
+      <li> $\beta_{1j} = \gamma_{10} + \gamma_{11}*D1 + \gamma_{12}*D2 + U_{1j}$</li>
+    </ul>
+</ul>
 
 Variable  | D1  | D2  
 --------- | --- | ---

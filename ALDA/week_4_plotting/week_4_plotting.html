@@ -2931,6 +2931,7 @@ div.tocify {
 <h1>Workspace</h1>
 <div id="packages" class="section level2">
 <h2>Packages</h2>
+<p>First let’s load in our packages. We’re going to load in a couple of extras (<code>brms</code> and <code>tidybayes</code>) that we haven’t used before. These will let us make some pretty plots later.</p>
 <div class="sourceCode" id="cb1"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb1-1" data-line-number="1"><span class="kw">library</span>(psych)</a>
 <a class="sourceLine" id="cb1-2" data-line-number="2"><span class="kw">library</span>(knitr)</a>
 <a class="sourceLine" id="cb1-3" data-line-number="3"><span class="kw">library</span>(kableExtra)</a>
@@ -2945,6 +2946,63 @@ div.tocify {
 </div>
 <div id="read-in-data" class="section level2">
 <h2>Read in Data</h2>
+<p>The National Longitudinal Study of Youths 1979 Child and Young Adult Sample (NLSYCYA) is a longitudinal study conducted by the National Bureau of Labor Statistics. The sample includes the children of the original 1979 sample, of which we will use a small subset. Here, we are going to use a subset of the more than 11,000 variables available that include the following:</p>
+<table>
+<thead>
+<tr class="header">
+<th>Item Name</th>
+<th>Description</th>
+<th>Time-Varying?</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>PROC_CID</td>
+<td>Participant ID</td>
+<td>No</td>
+</tr>
+<tr class="even">
+<td>Dem_DOB</td>
+<td>Year of Date of Birth</td>
+<td>No</td>
+</tr>
+<tr class="odd">
+<td>groups</td>
+<td>Jail, Community Service, None</td>
+<td>No</td>
+</tr>
+<tr class="even">
+<td>DemPWeight</td>
+<td>Weight Percentile at age 10</td>
+<td>No</td>
+</tr>
+<tr class="odd">
+<td>age</td>
+<td>Age of participant</td>
+<td>Yes</td>
+</tr>
+<tr class="even">
+<td>Year</td>
+<td>Year of Survey</td>
+<td>Yes</td>
+</tr>
+<tr class="odd">
+<td>age0</td>
+<td>Age of participant (centered)</td>
+<td>Yes</td>
+</tr>
+<tr class="even">
+<td>SensSeek</td>
+<td>Sensation-Seeking Composite</td>
+<td>Yes</td>
+</tr>
+<tr class="odd">
+<td>CESD</td>
+<td>CESD Depression Composite</td>
+<td>Yes</td>
+</tr>
+</tbody>
+</table>
 <div class="sourceCode" id="cb2"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb2-1" data-line-number="1"><span class="kw">load</span>(<span class="kw">url</span>(<span class="kw">sprintf</span>(<span class="st">&quot;%s/ALDA/week_4_plotting/data/sample.RData&quot;</span>, data_path)))</a>
 <a class="sourceLine" id="cb2-2" data-line-number="2"></a>
 <a class="sourceLine" id="cb2-3" data-line-number="3">sample_dat</a></code></pre></div>
@@ -2956,6 +3014,7 @@ div.tocify {
 </div>
 <div id="restructure-data" class="section level2">
 <h2>Restructure Data</h2>
+<p>These data are already largely cleaned as that is not our focus today. We just need to do a little bit of restructuring.</p>
 <p>To run our models using <code>purrr</code>, we need to restrucutre the data to long. While we’re at it, we need to create a time variable centered at zero, so we can interpret our moderators later.</p>
 <div class="sourceCode" id="cb3"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb3-1" data-line-number="1">(df1_long &lt;-<span class="st"> </span>sample_dat <span class="op">%&gt;%</span></a>
 <a class="sourceLine" id="cb3-2" data-line-number="2"><span class="st">  </span><span class="kw">gather</span>(<span class="dt">key =</span> trait, <span class="dt">value =</span> value, CESD, SensSeek, <span class="dt">na.rm =</span> T) <span class="op">%&gt;%</span></a>
@@ -2980,10 +3039,22 @@ div.tocify {
 {"columns":[{"label":["trait"],"name":[1],"type":["chr"],"align":["left"]},{"label":["data"],"name":[2],"type":["S3: vctrs_list_of"],"align":["right"]}],"data":[{"1":"CESD","2":"<S3: vctrs_list_of>"},{"1":"SensSeek","2":"<S3: vctrs_list_of>"}],"options":{"columns":{"min":{},"max":[10]},"rows":{"min":[10],"max":[10]},"pages":{}}}
   </script>
 </div>
-<p>Now, our data frame is 5 x 2, with the elements in the second column each containing the data frame that corresponds to that trait. This makes it really easy to run our models using the <code>map()</code> family of unctions from <code>purrr</code>.</p>
+<p>Now, our data frame is 2 x 2, with the elements in the second column each containing the data frame that corresponds to that trait. This makes it really easy to run our models using the <code>map()</code> family of unctions from <code>purrr</code>.</p>
 <p>Before we fit the full growth model, we will first fit the unconditional model. Below, we will add a new column to our data frame that will contain the unconditional model for each trait.</p>
 In this case the model will be in the form of:
-
+<ul>
+<li>
+<strong>Level 1:</strong> <span class="math inline">\(Y_{ij} = \beta_{0j} + \varepsilon{ij}\)</span>
+</li>
+<li>
+<strong>Level 2:</strong>
+</li>
+<ul>
+<li>
+<span class="math inline">\(\beta_{0j} = \gamma_{00} + U_{0j}\)</span>
+</li>
+</ul>
+</ul>
 <div class="sourceCode" id="cb5"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb5-1" data-line-number="1">(df1_nested &lt;-<span class="st"> </span>df1_nested <span class="op">%&gt;%</span></a>
 <a class="sourceLine" id="cb5-2" data-line-number="2"><span class="st">  </span><span class="kw">mutate</span>(<span class="dt">fit0 =</span> <span class="kw">map</span>(data, <span class="op">~</span><span class="kw">lmer</span>(value <span class="op">~</span><span class="st"> </span><span class="dv">1</span> <span class="op">+</span><span class="st"> </span>(<span class="dv">1</span> <span class="op">|</span><span class="st"> </span>PROC_CID), <span class="dt">data =</span> .))))</a></code></pre></div>
 <div data-pagedtable="false">
@@ -2994,7 +3065,22 @@ In this case the model will be in the form of:
 <p>Now we can see we have a new list column in our data frame called fit0 that contains an S4 class lmerMod, which simply means your growth model. To understand model, I personally find it easiest to visualize it. What this model is telling us is the mean across all observations as well as the between-person variability in that estimate.</p>
 <p>Now, moving on to the growth model:</p>
 In this case the model will be in the form of:
-
+<ul>
+<li>
+<strong>Level 1:</strong> <span class="math inline">\(Y_{ij} = \beta_{0j} + \beta_{1j}*time_{ij} + \varepsilon{ij}\)</span>
+</li>
+<li>
+<strong>Level 2:</strong>
+</li>
+<ul>
+<li>
+<span class="math inline">\(\beta_{0j} = \gamma_{00} + U_{0j}\)</span>
+</li>
+<li>
+<span class="math inline">\(\beta_{1j} = \gamma_{10} + U_{1j}\)</span>
+</li>
+</ul>
+</ul>
 <div class="sourceCode" id="cb6"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb6-1" data-line-number="1">(df1_nested &lt;-<span class="st"> </span>df1_nested <span class="op">%&gt;%</span></a>
 <a class="sourceLine" id="cb6-2" data-line-number="2"><span class="st">  </span><span class="kw">mutate</span>(<span class="dt">fit2 =</span> <span class="kw">map</span>(data, <span class="op">~</span><span class="kw">lmer</span>(value <span class="op">~</span><span class="st"> </span><span class="dv">1</span> <span class="op">+</span><span class="st"> </span>age0 <span class="op">+</span><span class="st"> </span>(age0 <span class="op">|</span><span class="st"> </span>PROC_CID), <span class="dt">data =</span> .))))</a></code></pre></div>
 <div data-pagedtable="false">
@@ -3003,7 +3089,7 @@ In this case the model will be in the form of:
   </script>
 </div>
 <p>Now that we’ve run our model, we are ready to plot the results.</p>
-<p>To do so, we’ll write a short function that will get the predicted values both for group level effects, as well as for individual-level estimates.</p>
+<p>To do so, we’ll write a short function that will get the predicted values both for group level effects, as well as for individual-level estimates. There’s also a hidden function for getting standard errors of our pointwise estimates that we’ll use to create confidence bands in our plots. Don’t worry about that.</p>
 <div class="sourceCode" id="cb7"><pre class="sourceCode r"><code class="sourceCode r"><a class="sourceLine" id="cb7-1" data-line-number="1">fixed_pred_fun &lt;-<span class="st"> </span><span class="cf">function</span>(m){</a>
 <a class="sourceLine" id="cb7-2" data-line-number="2">  frame &lt;-<span class="st"> </span><span class="kw">tibble</span>(<span class="dt">Intercept =</span> <span class="dv">1</span>, <span class="dt">age0 =</span> <span class="kw">seq</span>(<span class="dv">0</span>, <span class="dv">8</span>, <span class="fl">.1</span>)) <span class="op">%&gt;%</span></a>
 <a class="sourceLine" id="cb7-3" data-line-number="3"><span class="st">    </span><span class="kw">mutate</span>(<span class="dt">fixed_pred =</span> <span class="kw">predict</span>(m, <span class="dt">newdata =</span> ., <span class="dt">re.form =</span> <span class="ot">NA</span>),</a>
@@ -3081,9 +3167,39 @@ In this case the model will be in the form of:
 <div id="two-level-categorical-moderator" class="section level2">
 <h2>Two-Level Categorical Moderator</h2>
 <p>Let’s start with the basic syntax:</p>
-
+<ul>
+<li>
+<strong>Level 1:</strong> <span class="math inline">\(Y_{ij} = \beta_{0j} + \beta_{1j}*time_{1j} + \varepsilon{ij}\)</span>
+</li>
+<li>
+<strong>Level 2:</strong>
+</li>
+<ul>
+<li>
+<span class="math inline">\(\beta_{0j} = \gamma_{00} + \gamma_{01}*X_{2j} + U_{0j}\)</span>
+</li>
+<li>
+<span class="math inline">\(\beta_{1j} = \gamma_{10} + \gamma_{11}*X_{2j} + U_{1j}\)</span>
+</li>
+</ul>
+</ul>
 <p>Now let’s swap that out for a 2 group sample from the present data:</p>
-
+<ul>
+<li>
+<strong>Level 1:</strong> <span class="math inline">\(Y_{ij} = \beta_{0j} + \beta_{1j}*age0_{ij} + \varepsilon{ij}\)</span>
+</li>
+<li>
+<strong>Level 2:</strong>
+</li>
+<ul>
+<li>
+<span class="math inline">\(\beta_{0j} = \gamma_{00} + \gamma_{01}*groupsNone + U_{0j}\)</span>
+</li>
+<li>
+<span class="math inline">\(\beta_{1j} = \gamma_{10} + \gamma_{11}*groupsNone + U_{1j}\)</span>
+</li>
+</ul>
+</ul>
 <table>
 <thead>
 <tr class="header">
@@ -3165,7 +3281,22 @@ Jail: <span class="math inline">\(Y_{ij} = \gamma_{00} + \gamma_{01} + (\gamma_{
 </div>
 <div id="three-level-categorical-moderator" class="section level2">
 <h2>Three-Level Categorical Moderator</h2>
-
+<ul>
+<li>
+<strong>Level 1:</strong> <span class="math inline">\(Y_{ij} = \beta_{0j} + \beta_{1j}*age0_{ij} + \varepsilon{ij}\)</span>
+</li>
+<li>
+<strong>Level 2:</strong>
+</li>
+<ul>
+<li>
+<span class="math inline">\(\beta_{0j} = \gamma_{00} + \gamma_{01}*D1 + \gamma_{02}*D2 + U_{0j}\)</span>
+</li>
+<li>
+<span class="math inline">\(\beta_{1j} = \gamma_{10} + \gamma_{11}*D1 + \gamma_{12}*D2 + U_{1j}\)</span>
+</li>
+</ul>
+</ul>
 <table>
 <thead>
 <tr class="header">
