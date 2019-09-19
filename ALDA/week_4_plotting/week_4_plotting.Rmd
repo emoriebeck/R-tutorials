@@ -1,0 +1,71 @@
+---
+title: "Plotting Tutorial"
+subtitle: "Applied Longitudinal Data Analysis"
+author: "Emorie D Beck"
+date: "`r Sys.setlocale('LC_TIME', 'C'); format(Sys.time(), '%d\\\\. %B %Y')`"
+output:
+  html_document:
+    theme: united
+    highlight: tango
+    df_print: paged
+    code_folding: show
+    toc: true
+    toc_float: true
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = F, warning = F, error = F)
+```
+
+<a href="https://raw.githubusercontent.com/emoriebeck/R-tutorials/master/ALDA/week_4_plotting/week_4_plotting.Rmd" download>Download .Rmd (won't work in Safari or IE)</a>  
+<a href="https://github.com/emoriebeck/R-tutorials/tree/master/ALDA/week_4_plotting" target="_blank">See GitHub Repository</a>  
+
+## Read in Data  
+```{r read data ex6}
+(codebook <- sprintf("%s/ALDA/week_3_purrr/data/codebook_ex6.csv", data_path) %>%
+  read_csv %>%
+  mutate(old_name = str_to_lower(old_name)))
+
+read_fun <- function(Year){
+  old.names <- (codebook %>% filter(year == Year | year == 0))$old_name
+  new.names <- (codebook %>% filter(year == Year | year == 0))$new_name
+  set <- (codebook %>% filter(year == Year))$dataset[1]
+  sprintf("%s/ALDA/week_3_purrr/data/example_6/%s.csv", data_path, set) %>%
+    read_csv %>%
+    select(old.names) %>%
+    setNames(new.names)
+}
+
+(df6 <- tibble(year = 2005:2015) %>%
+  mutate(data = map(year, read_fun)) %>%
+  select(-year) %>%
+  unnest(data))
+```
+
+## Clean Data  
+
+Now the data are all loaded in and have been given informative variable names, but we still need to do some data cleaning for the personality data.  
+
+We'll start by selecting only the personality variables and reverse-scoring them. Then we'll create composites. To do so, we'll again use our codebook.  
+
+```{r clean data ex6}
+# reverse code
+(df6_long <- df6 %>%
+  select(Procedural__SID, contains("Big 5")) %>%
+  gather(key = item, value = value, -Procedural__SID, na.rm = T) %>%
+  left_join(codebook %>% select(item = new_name, reverse, mini, maxi)) %>%
+  mutate(value = ifelse(reverse == 1, value, 
+                        reverse.code(-1, value, mini = mini, maxi = maxi))))
+
+# create compoistes  
+(df6_long <- df6_long %>%
+  mutate(item = str_remove(item, "Big 5__")) %>%
+  separate(item, c("trait", "item"), sep = "_") %>%
+  separate(item, c("item", "year"), sep = "[.]") %>%
+  group_by(Procedural__SID, trait, year) %>%
+  summarize(value = mean(value, na.rm = T)) %>%
+  ungroup() %>%
+  mutate(wave = as.numeric(mapvalues(year, from = seq(2005, 2013, 4), to = seq(0, 2, 1)))))
+```
