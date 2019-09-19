@@ -30,6 +30,8 @@ library(knitr)
 library(kableExtra)
 library(lme4)
 library(broom.mixed)
+library(brms)
+library(tidybayes)
 library(plyr)
 library(tidyverse)
 
@@ -38,53 +40,389 @@ data_path <- "https://github.com/emoriebeck/R-tutorials/raw/master"
 
 ## Read in Data  
 ```{r read data ex6}
-(codebook <- sprintf("%s/ALDA/week_4_purrr/data/codebook_ex1.csv", data_path) %>%
-  read_csv %>%
-  mutate(old_name = str_to_lower(old_name)))
+load(url(sprintf("%s/ALDA/week_4_plotting/data/sample.RData", data_path)))
 
-read_fun <- function(Year){
-  old.names <- (codebook %>% filter(year == Year | year == 0))$old_name
-  new.names <- (codebook %>% filter(year == Year | year == 0))$new_name
-  set <- (codebook %>% filter(year == Year))$dataset[1]
-  sprintf("%s/ALDA/week_3_purrr/data/example_6/%s.csv", data_path, set) %>%
-    read_csv %>%
-    select(old.names) %>%
-    setNames(new.names)
-}
-
-(df6 <- tibble(year = 2005:2015) %>%
-  mutate(data = map(year, read_fun)) %>%
-  select(-year) %>%
-  unnest(data))
+sample_dat
 ```
 
-## Clean Data  
+## Restructure Data  
 
-Now the data are all loaded in and have been given informative variable names, but we still need to do some data cleaning for the personality data.  
+To run our models using `purrr`, we need to restrucutre the data to long. While we're at it, we need to create a time variable centered at zero, so we can interpret our moderators later. 
+```{r}
+(df1_long <- sample_dat %>%
+  gather(key = trait, value = value, CESD, SensSeek, na.rm = T) %>%
+   mutate(wave = year - 1996,
+          age0 = age-16)) 
+```
 
-We'll start by selecting only the personality variables and reverse-scoring them. Then we'll create composites. To do so, we'll again use our codebook.  
 
-```{r clean data ex6}
-# reverse code
-(df6_long <- df6 %>%
-  select(Procedural__SID, contains("Big 5")) %>%
-  gather(key = item, value = value, -Procedural__SID, na.rm = T) %>%
-  left_join(codebook %>% select(item = new_name, reverse, mini, maxi)) %>%
-  mutate(value = ifelse(reverse == 1, value, 
-                        reverse.code(-1, value, mini = mini, maxi = maxi))))
+# The Basic Growth Model  
 
-# create compoistes  
-(df6_long <- df6_long %>%
-  mutate(item = str_remove(item, "Big 5__")) %>%
-  separate(item, c("trait", "item"), sep = "_") %>%
-  separate(item, c("item", "year"), sep = "[.]") %>%
-  group_by(Procedural__SID, trait, year) %>%
-  summarize(value = mean(value, na.rm = T)) %>%
-  ungroup() %>%
-  mutate(wave = as.numeric(mapvalues(year, from = seq(2005, 2013, 4), to = seq(0, 2, 1)))))
+We'll start with the basic growth model (just looking at change in a single variable over time).  
+
+we will use list columns to do it. We'll start by using the `group_by()` and `nest()` functions from `dplyr` and `tidyr` to put the data for each trait into a cell of our data frame:  
+
+```{r nest ex6}
+(df1_nested <- df1_long %>%
+  group_by(trait) %>%
+  nest())
+```
+
+Now, our data frame is 5 x 2, with the elements in the second column each containing the data frame that corresponds to that trait. This makes it really easy to run our models using the `map()` family of unctions from `purrr`.  
+
+Before we fit the full growth model, we will first fit the unconditional model. Below, we will add a new column to our data frame that will contain the unconditional model for each trait. 
+
+In this case the model will be in the form of: 
+\begin{itemize}
+  \item \textbf{Level 1:} $Y_{ij} = \beta_{0j} + \varepsilon{ij}$
+  \item \textbf{Level 2:} 
+    \begin{itemize} 
+      \item $\beta_{0j} = \gamma_{00} + U_{0j}$
+    \end{itemize}
+\end{itemize}
+
+```{r fit0 ex6}
+(df1_nested <- df1_nested %>%
+  mutate(fit0 = map(data, ~lmer(value ~ 1 + (1 | PROC_CID), data = .))))
+```
+
+Now we can see we have a new list column in our data frame called fit0 that contains an S4 class lmerMod, which simply means your growth model. To understand model, I personally find it easiest to visualize it. What this model is telling us is the mean across all observations as well as the between-person variability in that estimate. 
+
+Now, moving on to the growth model: 
+
+In this case the model will be in the form of: 
+\begin{itemize}
+  \item \textbf{Level 1:} $Y_{ij} = \beta_{0j} + \beta_{1j}*time_{ij} + \varepsilon{ij}$
+  \item \textbf{Level 2:} 
+    \begin{itemize} 
+      \item $\beta_{0j} = \gamma_{00} + U_{0j}$
+      \item $\beta_{1j} = \gamma_{10} + U_{1j}$
+    \end{itemize}
+\end{itemize}
+
+```{r fit12 ex6}
+(df1_nested <- df1_nested %>%
+  mutate(fit2 = map(data, ~lmer(value ~ 1 + age0 + (age0 | PROC_CID), data = .))))
+```
+
+Now that we've run our model, we are ready to plot the results.  
+
+To do so, we'll write a short function that will get the predicted values both for group level effects, as well as for individual-level estimates.  
+
+```{r, echo = F}
+frame <- crossing(Intercept = 1, 
+         age0 = seq(0,8,1),
+         groups = c(0,1)) %>%
+  mutate(Int = age0*groups)
+
+pv_fun <- function(frame, m){
+  nvar <- nrow(vcov(m)) # # of variables
+  varnames <- str_replace_all(colnames(vcov(m)), "[()]", "") # names for vcov mat
+  vcov_mat <- matrix(vcov(summary(m))@x, nvar) # chnage vcov mat class
+  colnames(vcov_mat) <- varnames; rownames(vcov_mat) <- varnames # rename vcov mat
+  frame_mat <- frame %>% as.matrix
+  pv <- diag(frame_mat %*% vcov_mat %*% t(frame_mat)) # compute variance
+  SE <- sqrt(pv) 
+  return(SE)
+}
+```
+
+
+```{r}
+fixed_pred_fun <- function(m){
+  frame <- tibble(Intercept = 1, age0 = seq(0, 8, .1)) %>%
+    mutate(fixed_pred = predict(m, newdata = ., re.form = NA),
+           age = age0 + 16)
+  frame$SE <- pv_fun(frame %>% select(Intercept, age0), m)
+  frame %>% select(-Intercept)
+}
+
+ran_pred_fun <- function(m){
+  crossing(age0 = seq(0, 8, 1),
+         PROC_CID = m@frame$PROC_CID) %>%
+    mutate(ran_pred = predict(m, newdata = .),
+           age = age0 + 16)
+}
+
+(df1_nested <- df1_nested %>%
+  mutate(fixed_pred = map(fit2, fixed_pred_fun),
+         ran_pred = map(fit2, ran_pred_fun),
+         combined_pred = map2(fixed_pred, ran_pred, full_join)))
 ```
 
 ```{r}
+df1_nested %>%
+  select(trait, combined_pred) %>%
+  unnest(combined_pred) %>%
+  ggplot(aes(x = age)) +
+    geom_line(aes(y = ran_pred, color = trait, group = PROC_CID), size = .25, alpha = .5) +
+    geom_line(aes(y = fixed_pred), size = 2) +
+    lims(y = c(0,4)) +
+    labs(x = "Age", y = "Composite Rating",
+         title = "Simple Growth Models") +
+    facet_grid(~trait) +
+    theme_classic() +
+    theme(axis.text = element_text(face = "bold", size = rel(1.2)),
+          axis.title = element_text(face = "bold", size = rel(1.2)),
+          legend.title = element_text(face = "bold", size = rel(1.2)),
+          legend.position = "none",
+          plot.title = element_text(face = "bold", size = rel(1.2), hjust = .5))
+```
 
+And with confidence bands:   
+
+```{r}
+df1_nested %>% 
+  mutate(df = map_dbl(fit2, df.residual)) %>%
+  select(trait, fixed_pred, df) %>%
+  unnest(fixed_pred) %>%
+  ggplot(aes(x = age, y = fixed_pred, fill = trait)) +
+    geom_ribbon(aes(ymin=fixed_pred-1.96*SE,ymax=fixed_pred+1.96*SE),alpha=0.2,fill="blue") +  
+    geom_line(size = 2) +
+    facet_grid(~trait) +
+    theme_classic() +
+    theme(axis.text = element_text(face = "bold", size = rel(1.2)),
+          axis.title = element_text(face = "bold", size = rel(1.2)),
+          legend.title = element_text(face = "bold", size = rel(1.2)),
+          legend.position = "none",
+          plot.title = element_text(face = "bold", size = rel(1.2), hjust = .5))
+```
+
+
+```{r}
+df1_nested %>% 
+  mutate(df = map_dbl(fit2, df.residual)) %>%
+  select(trait, fixed_pred, df) %>%
+  unnest(fixed_pred) %>%
+  ggplot(aes(x = age, y = fixed_pred, fill = trait)) +
+    stat_dist_lineribbon(
+      aes(dist = "student_t", arg1 = unique(df), arg2 = fixed_pred, arg3 = SE),
+      alpha = 1/4
+    ) +
+    facet_grid(~trait) +
+    theme_classic() +
+    theme(axis.text = element_text(face = "bold", size = rel(1.2)),
+          axis.title = element_text(face = "bold", size = rel(1.2)),
+          legend.title = element_text(face = "bold", size = rel(1.2)),
+          legend.position = "none",
+          plot.title = element_text(face = "bold", size = rel(1.2), hjust = .5))
+```
+
+
+## Two-Level Categorical Moderator  
+
+Let's start with the basic syntax:  
+
+\begin{itemize}
+  \item \textbf{Level 1:} $Y_{ij} = \beta_{0j} + \beta_{1j}*time_{1j} + \varepsilon{ij}$
+  \item \textbf{Level 2:} 
+    \begin{itemize} 
+      \item $\beta_{0j} = \gamma_{00} + \gamma_{01}*X_{2j} + U_{0j}$
+      \item $\beta_{1j} = \gamma_{10} + \gamma_{11}*X_{2j} + U_{1j}$
+    \end{itemize}
+\end{itemize}
+
+Now let's swap that out for a 2 group sample from the present data:  
+
+\begin{itemize}
+  \item \textbf{Level 1:} $Y_{ij} = \beta_{0j} + \beta_{1j}*age0_{ij} + \varepsilon{ij}$
+  \item \textbf{Level 2:} 
+    \begin{itemize} 
+      \item $\beta_{0j} = \gamma_{00} + \gamma_{01}*groupsNone + U_{0j}$
+      \item $\beta_{1j} = \gamma_{10} + \gamma_{11}*groupsNone + U_{1j}$
+    \end{itemize}
+\end{itemize}
+
+Variable  | D1  
+--------- | ---
+Jail      | 0 
+None      | 1
+
+```{r}
+df1_nested <- df1_nested %>%
+  mutate(data_2g = map(data, function(x) x %>% filter(groups != "CommServ")),
+         fit3 = map(data_2g, ~lmer(value ~ 1 + age0*groups + (age0 | PROC_CID), data = .)))
+```
+
+When we plot these, we are plotting the simple slopes. Subbing 1 and 0 into the equations above we end up with the following for the groups.  
+
+None: $Y_{ij} = \gamma_{00} + \gamma_{10}*age$  
+Jail: $Y_{ij} = \gamma_{00} + \gamma_{01} + (\gamma_{10} + \gamma_{11})*age$  
+
+```{r}
+fixed_pred_fun <- function(m){
+  frame <- crossing(Intercept = 1, age0 = seq(0, 8, .1),
+           groups = c("Jail", "None")) %>%
+    mutate(fixed_pred = predict(m, newdata = ., re.form = NA),
+           age = age0 + 16,
+           groupsn = as.numeric(mapvalues(groups, unique(groups), c(1,0))),
+           Int = age0*groupsn)
+  frame$SE <- pv_fun(frame %>% select(Intercept, age0, groupsn, Int), m)
+  frame %>% select(-Intercept, -groupsn, -Int)
+}
+
+fixed_pred_fun <- function(m){
+  crossing(age0 = seq(0, 8, 1),
+           groups = c("Jail", "None")) %>%
+    mutate(fixed_pred = predict(m, newdata = ., re.form = NA),
+           age = age0 + 16)
+}
+
+ran_pred_fun <- function(m){
+  crossing(age0 = seq(0, 8, 1),
+         PROC_CID = m@frame$PROC_CID) %>%
+    left_join(m@frame %>% tbl_df %>% select(PROC_CID, groups)) %>%
+    distinct() %>%
+    mutate(ran_pred = predict(m, newdata = .),
+           age = age0 + 16)
+}
+
+(df1_nested <- df1_nested %>%
+  mutate(fixed_pred3 = map(fit3, fixed_pred_fun),
+         ran_pred3 = map(fit3, ran_pred_fun),
+         combined_pred3 = map2(fixed_pred3, ran_pred3, full_join)))
+```
+
+```{r}
+df1_nested %>%
+  select(trait, combined_pred3) %>%
+  unnest(combined_pred3) %>%
+  ggplot(aes(x = age)) +
+    scale_color_manual(values = c("blue", "red")) +
+    geom_line(aes(y = ran_pred, color = groups, group = PROC_CID), size = .25, alpha = .1) +
+    geom_line(aes(y = fixed_pred, color = groups), size = 2) +
+    lims(y = c(0,4)) +
+    labs(x = "Age", y = "Composite Rating",
+         title = "Simple Growth Models") +
+    facet_grid(~trait) +
+    theme_classic() +
+    theme(axis.text = element_text(face = "bold", size = rel(1.2)),
+          axis.title = element_text(face = "bold", size = rel(1.2)),
+          legend.title = element_text(face = "bold", size = rel(1.2)),
+          legend.position = "none",
+          plot.title = element_text(face = "bold", size = rel(1.2), hjust = .5))
+```
+
+## Three-Level Categorical Moderator  
+\begin{itemize}
+  \item \textbf{Level 1:} $Y_{ij} = \beta_{0j} + \beta_{1j}*age0_{ij} + \varepsilon{ij}$
+  \item \textbf{Level 2:} 
+    \begin{itemize} 
+      \item $\beta_{0j} = \gamma_{00} + \gamma_{01}*D1 + \gamma_{02}*D2 + U_{0j}$
+      \item $\beta_{1j} = \gamma_{10} + \gamma_{11}*D1 + \gamma_{12}*D2 + U_{1j}$
+    \end{itemize}
+\end{itemize}
+
+Variable  | D1  | D2  
+--------- | --- | ---
+Jail      | 0   | 0
+None      | 1   | 0
+CommServ  | 0   | 1  
+
+```{r}
+df1_nested <- df1_nested %>%
+  mutate(fit4 = map(data, ~lmer(value ~ 1 + age0*groups + (age0 | PROC_CID), data = .)))
+```
+
+When we plot these, we are plotting the simple slopes. Subbing 1 and 0 into the equations above we end up with the following for the groups.  
+
+None: $Y_{ij} = \gamma_{00} + \gamma_{10}*age$  
+Jail: $Y_{ij} = \gamma_{00} + \gamma_{01} + (\gamma_{10} + \gamma_{11})*age$  
+Community Service: $Y_{ij} = \gamma_{00} + \gamma_{02} + (\gamma_{10} + \gamma_{12})*age$  
+
+```{r}
+fixed_pred_fun <- function(m){
+  crossing(age0 = seq(0, 8, 1),
+           groups = c("Jail", "None", "CommServ")) %>%
+    mutate(fixed_pred = predict(m, newdata = ., re.form = NA),
+           age = age0 + 16)
+}
+
+ran_pred_fun <- function(m){
+  crossing(age0 = seq(0, 8, 1),
+         PROC_CID = m@frame$PROC_CID) %>%
+    left_join(m@frame %>% tbl_df %>% select(PROC_CID, groups)) %>%
+    distinct() %>%
+    mutate(ran_pred = predict(m, newdata = .),
+           age = age0 + 16)
+}
+
+(df1_nested <- df1_nested %>%
+  mutate(fixed_pred4 = map(fit4, fixed_pred_fun),
+         ran_pred4 = map(fit4, ran_pred_fun),
+         combined_pred4 = map2(fixed_pred4, ran_pred4, full_join)))
+```
+
+```{r}
+df1_nested %>%
+  select(trait, combined_pred4) %>%
+  unnest(combined_pred4) %>%
+  ggplot(aes(x = age)) +
+    scale_color_manual(values = c("blue", "red", "black")) +
+    geom_line(aes(y = ran_pred, color = groups, group = PROC_CID), size = .25, alpha = .1) +
+    geom_line(aes(y = fixed_pred, color = groups), size = 2) +
+    lims(y = c(0,4)) +
+    labs(x = "Age", y = "Composite Rating",
+         title = "Simple Growth Models") +
+    facet_grid(~trait) +
+    theme_classic() +
+    theme(axis.text = element_text(face = "bold", size = rel(1.2)),
+          axis.title = element_text(face = "bold", size = rel(1.2)),
+          legend.title = element_text(face = "bold", size = rel(1.2)),
+          legend.position = "none",
+          plot.title = element_text(face = "bold", size = rel(1.2), hjust = .5))
+```
+
+## Continuous Time-Invariant Moderator  
+```{r}
+df1_nested <- df1_nested %>%
+  mutate(fit5 = map(data, ~lmer(value ~ 1 + age0*DemPweight + (age0 | PROC_CID), data = .)))
+```
+
+```{r}
+fixed_pred_fun <- function(m){
+  desc <- Rmisc::summarySE(m@frame, measurevar = "DemPweight")
+    crossing(age0 = seq(0, 8, 1),
+           DemPweight = c(desc$DemPweight - desc$sd, 
+                          desc$DemPweight, 
+                          desc$DemPweight + desc$sd)) %>%
+    mutate(fixed_pred = predict(m, newdata = ., re.form = NA),
+           age = age0 + 16,
+           Weight = factor(DemPweight, levels = unique(DemPweight), labels = c("-1SD", "0SD", "1SD")))
+}
+
+ran_pred_fun <- function(m){
+  crossing(age0 = seq(0, 8, 1),
+         PROC_CID = m@frame$PROC_CID) %>%
+    left_join(m@frame %>% tbl_df %>% select(PROC_CID, DemPweight)) %>%
+    distinct() %>%
+    mutate(ran_pred = predict(m, newdata = .),
+           age = age0 + 16)
+}
+
+(df1_nested <- df1_nested %>%
+  mutate(fixed_pred5 = map(fit5, fixed_pred_fun),
+         ran_pred5 = map(fit5, ran_pred_fun),
+         combined_pred5 = map2(fixed_pred5, ran_pred5, full_join)))
+```
+
+```{r}
+df1_nested %>%
+  select(trait, combined_pred5) %>%
+  unnest(combined_pred5) %>%
+  ggplot(aes(x = age)) +
+    scale_color_manual(values = c("blue", "red", "black")) +
+    # geom_line(aes(y = ran_pred, group = PROC_CID), size = .25, alpha = .1) +
+    geom_line(aes(y = fixed_pred, color = Weight), size = 1) +
+    lims(y = c(0,4)) +
+    labs(x = "Age", y = "Composite Rating",
+         title = "Simple Growth Models") +
+    facet_wrap(~trait, scales = "free_y") +
+    theme_classic() +
+    theme(axis.text = element_text(face = "bold", size = rel(1.2)),
+          axis.title = element_text(face = "bold", size = rel(1.2)),
+          legend.title = element_text(face = "bold", size = rel(1.2)),
+          legend.position = "none",
+          plot.title = element_text(face = "bold", size = rel(1.2), hjust = .5))
 ```
 
