@@ -22,9 +22,23 @@ knitr::opts_chunk$set(echo = TRUE, message = F, warning = F, error = F)
 <a href="https://raw.githubusercontent.com/emoriebeck/R-tutorials/master/ALDA/week_4_plotting/week_4_plotting.Rmd" download>Download .Rmd (won't work in Safari or IE)</a>  
 <a href="https://github.com/emoriebeck/R-tutorials/tree/master/ALDA/week_4_plotting" target="_blank">See GitHub Repository</a>  
 
+# Workspace  
+## Packages  
+```{r packages}
+library(psych)
+library(knitr)
+library(kableExtra)
+library(lme4)
+library(broom.mixed)
+library(plyr)
+library(tidyverse)
+
+data_path <- "https://github.com/emoriebeck/R-tutorials/raw/master"
+```
+
 ## Read in Data  
 ```{r read data ex6}
-(codebook <- sprintf("%s/ALDA/week_3_purrr/data/codebook_ex6.csv", data_path) %>%
+(codebook <- sprintf("%s/ALDA/week_4_purrr/data/codebook_ex1.csv", data_path) %>%
   read_csv %>%
   mutate(old_name = str_to_lower(old_name)))
 
@@ -69,3 +83,8 @@ We'll start by selecting only the personality variables and reverse-scoring them
   ungroup() %>%
   mutate(wave = as.numeric(mapvalues(year, from = seq(2005, 2013, 4), to = seq(0, 2, 1)))))
 ```
+
+```{r}
+
+```
+
