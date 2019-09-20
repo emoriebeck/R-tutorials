@@ -163,12 +163,29 @@ ran_pred_fun <- function(m){
            age = age0 + 16)
 }
 
+ran_pred_fun <- function(m){
+  augment(m)
+}
+
 # get fixed and random efects, and also combine them.
 (df1_nested <- df1_nested %>%
   mutate(fixed_pred = map(fit2, fixed_pred_fun),
          ran_pred = map(fit2, ran_pred_fun),
          combined_pred = map2(fixed_pred, ran_pred, full_join)))
 ```
+
+```{r}
+df1_nested <- df1_nested  %>%
+  mutate(ran_pred = map(fit2, augment))
+
+df1_nested %>% unnest(ran_pred) %>%
+  mutate(age = age0 + 16) %>%
+  ggplot(aes(x = age, y = .fitted, group = PROC_CID)) +
+    geom_line(size = .25, alpha = .5, color = "darkgreen") +
+    facet_grid(~trait) +
+    theme_classic()
+```
+
 
 ## Plot  
 Now let's 
@@ -195,12 +212,14 @@ And with confidence bands:
 
 ```{r}
 df1_nested %>% 
-  mutate(df = map_dbl(fit2, df.residual)) %>%
-  select(trait, fixed_pred, df) %>%
+  select(trait, fixed_pred) %>%
   unnest(fixed_pred) %>%
   ggplot(aes(x = age, y = fixed_pred, fill = trait)) +
-    geom_ribbon(aes(ymin=fixed_pred-1.96*SE,ymax=fixed_pred+1.96*SE),alpha=0.2,fill="blue") +  
+    geom_ribbon(aes(ymin=fixed_pred-1.96*SE,
+                    ymax=fixed_pred+1.96*SE),alpha=0.2) +  
     geom_line(size = 2) +
+    labs(x = "Age", y = "Predicted Values") +
+    ylim(0,4) +
     facet_grid(~trait) +
     theme_classic() +
     theme(axis.text = element_text(face = "bold", size = rel(1.2)),
@@ -283,13 +302,6 @@ fixed_pred_fun <- function(m){
   frame %>% select(-Intercept, -groupsn, -Int)
 }
 
-fixed_pred_fun <- function(m){
-  crossing(age0 = seq(0, 8, 1),
-           groups = c("Jail", "None")) %>%
-    mutate(fixed_pred = predict(m, newdata = ., re.form = NA),
-           age = age0 + 16)
-}
-
 ran_pred_fun <- function(m){
   crossing(age0 = seq(0, 8, 1),
          PROC_CID = m@frame$PROC_CID) %>%
@@ -324,6 +336,20 @@ df1_nested %>%
           legend.position = "none",
           plot.title = element_text(face = "bold", size = rel(1.2), hjust = .5))
 ```
+
+```{r}
+df1_nested %>%
+  unnest(fixed_pred3) %>%
+  ggplot(aes(x = age, y = fixed_pred, group = groups)) +
+    geom_ribbon(aes(ymin = fixed_pred - SE * 1.96,
+                    ymax = fixed_pred + SE * 1.96, 
+                    fill = groups),
+                alpha = .5) +
+    geom_line(size = 1) +
+    facet_grid(~trait) +
+    theme_classic()
+```
+
 
 ## Three-Level Categorical Moderator  
 <ul>
@@ -407,7 +433,8 @@ fixed_pred_fun <- function(m){
     crossing(age0 = seq(0, 8, 1),
            DemPweight = c(desc$DemPweight - desc$sd, 
                           desc$DemPweight, 
-                          desc$DemPweight + desc$sd)) %>%
+                          desc$DemPweight + desc$sd),
+           gender = ) %>%
     mutate(fixed_pred = predict(m, newdata = ., re.form = NA),
            age = age0 + 16,
            Weight = factor(DemPweight, levels = unique(DemPweight), labels = c("-1SD", "0SD", "1SD")))
@@ -447,4 +474,14 @@ df1_nested %>%
           legend.position = "none",
           plot.title = element_text(face = "bold", size = rel(1.2), hjust = .5))
 ```
+
+```{r}
+df1_nested %>%
+  unnest(fixed_pred5) %>%
+  ggplot(aes(x = age, y = fixed_pred, group = Weight)) +
+    geom_line(aes(color = Weight), size = 1) +
+    facet_wrap(~trait, scales = "free_y") + 
+    theme_classic()
+```
+
 
