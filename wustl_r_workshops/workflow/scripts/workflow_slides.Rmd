@@ -1,18 +1,34 @@
 ---
 title: "Developing Your R Workflow"
 author: "Emorie D Beck"
-institution: "Washington University in St. Louis"
-date: "`r Sys.setlocale('LC_TIME', 'C'); format(Sys.time(), '%d\\\\. %B %Y')`"
-output: 
-  ioslides_presentation:
-    theme: united
-    highlight: tango
-    df_print: paged
+date: "`r Sys.setlocale('LC_TIME', 'C'); format(Sys.time(), '%d\\. %B %Y')`"
+output:
+  slidy_presentation:
     code_folding: show
-    toc: true
-    toc_float: true
+    df_print: paged
+    highlight: tango
+    mathjax: local
+    self_contained: no
+    smaller: yes
+    theme: united
+    toc: yes
     toc_depth: 2
-editor_options: 
+    toc_float: yes
+    widescreen: yes
+  ioslides_presentation:
+    code_folding: show
+    df_print: paged
+    highlight: tango
+    mathjax: local
+    self_contained: no
+    smaller: yes
+    theme: united
+    toc: yes
+    toc_depth: 2
+    toc_float: yes
+    widescreen: yes
+institution: Washington University in St. Louis
+editor_options:
   chunk_output_type: console
 ---
 
