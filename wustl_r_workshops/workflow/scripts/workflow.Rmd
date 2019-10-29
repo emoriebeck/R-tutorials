@@ -16,6 +16,11 @@ editor_options:
   chunk_output_type: console
 ---
 
+```{r, echo = F}
+knitr::opts_chunk$set(echo = FALSE, message = F, warning = F, error = F)
+```
+
+
 <a href="https://raw.githubusercontent.com/emoriebeck/R-tutorials/master/ALDA/week_1_descriptives/week_1_descriptives.Rmd" download>Download .Rmd (won't work in Safari or IE)</a>  
 <a href="https://github.com/emoriebeck/R-tutorials/tree/master/ALDA/week_1_descriptives" target="_blank">See GitHub Repository</a>  
 
@@ -47,7 +52,7 @@ A good workflow starts by keeping your files organized outside of R. A typical r
 
 You can set this up outside of `R`, but I'm going to quickly show you how to set up inside `R`.  
 
-```{r}
+```{r, results='hide'}
 data_path <- "~/Desktop/R_workshop_11_01"
 dir.create(data_path)
 c("data", "scripts", "results", "manuscript", "experimental materials", 
@@ -110,11 +115,11 @@ wd <- "https://github.com/emoriebeck/R-tutorials/blob/master/wustl_r_workshops/w
 
 download.file(
   url      = sprintf("%s/data/codebook.csv?raw=true", wd), 
-  destfile = destfile = sprintf("%s/data/codebook.csv", data_path)
+  destfile = sprintf("%s/data/codebook.csv", data_path)
   )
 
 # load the codebook
-(codebook <- sprintf("%s/data/codebook.csv", wd) %>% 
+(codebook <- sprintf("%s/data/codebook.csv", data_path) %>% 
     read_csv(.) %>%
     mutate(old_name = str_to_lower(old_name)))
 ```
@@ -161,13 +166,13 @@ This code below shows how I would read in and rename a wide-format data set usin
 # download the file
 download.file(
   url      = sprintf("%s/data/workflow_data.csv?raw=true", wd), 
-  destfile = destfile = sprintf("%s/data/workflow_data.csv", data_path)
+  destfile = sprintf("%s/data/workflow_data.csv", data_path)
   )
 
 old.names <- codebook$old_name # get old column names
 new.names <- codebook$new_name # get new column names
 
-(soep <- sprintf("%s/data/workflow_data.csv", wd) %>% # path to data
+(soep <- sprintf("%s/data/workflow_data.csv", data_path) %>% # path to data
   read_csv(.) %>% # read in data
   select(old.names) %>% # select the columns from our codebook
   setNames(new.names)) # rename columns with our new names
@@ -274,7 +279,7 @@ b5_soep_long %>%
     theme_classic()
 ```
 
-# Life Events Descriptives  
+## Life Events Descriptives  
 For count variables, like life events, we need to use something slightly different. We're typically more interested in counts -- in this case, how many people experienced each life event in the 10 years we're considering?  
 
 To do this, we'll use a little bit of `dplyr` rather than the base `R` function `table()` that is often used for count data. Instead, we'll use a combination of `group_by()` and `n()` to get the counts by group. In the end, we're left with a nice little table of counts.    
