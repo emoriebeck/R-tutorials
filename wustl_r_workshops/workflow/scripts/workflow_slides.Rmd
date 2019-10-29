@@ -216,6 +216,25 @@ In the GSOEP, `-1` to `-7` indicate various types of missing values, so we will 
                 to = rep(NA, 7), warn_missing = F)))) # values to NA
 ```
 
+# Activity  
+In the step above, I showed you one way to recode variables. In this case, using `mapvalues()` from the `plyr` package. But we just need to remove all the negative values from our variables (signaling missing or invalid data).  
+
+<strong> Write code for at least one other way of removing the negative values from all columns of the `soep` data frame.  
+
+# Activity  
+In the step above, I showed you one way to recode variables. In this case, using `mapvalues()` from the `plyr` package. But we just need to remove all the negative values from our variables (signaling missing or invalid data).  
+
+<strong> Write code for at least one other way of removing the negative values from all columns of the `soep` data frame.  
+
+```{r more recoding, eval=F}
+# using ifelse()
+(soep <- soep %>%
+  mutate_all(~ifelse(. < 0, NA, .)))
+
+# using Base R
+soep[soep < 0] <- NA
+```
+
 
 # Reverse-Scoring  
 Many scales we use have items that are positively or negatively keyed. High ratings on positively keyed items are indicative of being high on a construct. In contrast, high ratings on negatively keyed items are indicative of being low on a construct. Thus, to create the composite scores of constructs we often use, we must first "reverse" the negatively keyed items so that high scores indicate being higher on the construct. 
@@ -224,7 +243,7 @@ There are a few ways to do this in `R`. Below, I'll demonstrate how to do so usi
 
 Before we can do that, though, we need to restructure the data a bit in order to bring in the reverse coding information from our codebook. We will talk more about what's happening here in later tutorials on  `tidyr`, so for now, just bear with me.  
 
-----
+# Reverse-Scoring  
 
 ```{r reverse code}
 (soep_long <- soep %>%
@@ -251,15 +270,24 @@ Here's the simplest way, which is also the long way because you'd have to do it 
 ```{r}
 soep$C.2005 <- with(soep, rowMeans(cbind(`Big 5__C_thorough.2005`, `Big 5__C_lazy.2005`, 
                           `Big 5__C_efficient.2005`), na.rm = T)) 
+soep <- soep %>% select(-C.2005) # get rid of added column
 ```
 
 # Create Composites  
 ## BFI-S  
 But personally, I don't have a desire to do that 15 times, so we can use our codebook and `dplyr` to make our lives a whole lot easier.  
 
-```{r b5 composites}
-soep <- soep %>% select(-C.2005) # get rid of added column
+Try to create composites using the functions in `dplyr` for each of the Big 5.  
+(hint: use the `soep_long` data frame and filter in only Big 5 items)  
 
+# Create Composites  
+## BFI-S  
+But personally, I don't have a desire to do that 15 times, so we can use our codebook and `dplyr` to make our lives a whole lot easier.  
+
+Try to create composites using the functions in `dplyr` for each of the Big 5.  
+(hint: use the `soep_long` data frame and filter in only Big 5 items)  
+
+```{r b5 composites}
 (b5_soep_long <- soep_long %>%
   filter(type == "Big 5") %>% # keep Big 5 variables
   group_by(Procedural__SID, item, year) %>% # group by person, construct, & year
@@ -288,6 +316,19 @@ For the analyses I'd want to do with this data set, I'd want to combine every co
 SID     |  year  |   Event   |  le_value   | Trait   |   p_value  
 ------- | ------ | --------- | ----------- | ------- | -----------
 
+Try to create this data frame in `R`.  
+(hint: you'll need to use the following functions: `gather()`, `spread()`, and `full_join`.)  
+
+
+# Create Combination Data Set  
+For the analyses I'd want to do with this data set, I'd want to combine every combination of personality traits with every combination of event we have data for each person for. In other words, I'm looking for a data frame that looks like this:  
+
+SID     |  year  |   Event   |  le_value   | Trait   |   p_value  
+------- | ------ | --------- | ----------- | ------- | -----------
+
+Try to create this data frame in `R`.  
+(hint: you'll need to use the following functions: `gather()`, `spread()`, and `full_join`.)  
+
 ```{r combine data}
 # Create combined data frame  
 (combined_long <- b5_soep_long %>% # take Big Five Data 
@@ -310,10 +351,19 @@ SID     |  year  |   Event   |  le_value   | Trait   |   p_value
 # Descriptives  
 Descriptives of your data are incredibly important. They are your first line of defense against things that could go wrong later on when you run inferential stats. The help you check the distribution of your variables (e.g. non-normally distributed), look for implausible values, etc. 
 
+# Big Five Descriptives  
+
+There are lots of ways to create great tables of descriptives. My favorite way is using `dplyr`, but we will save that for a later lesson on creating great APA style tables in `R`. For now, we'll use a wonderfully helpful function from the `psych` package called `describe()` in conjunction with a small amount of `tidyr` to reshape the data. 
+
+1. Create a wide data frame that has a column for each personality variable in each year.  
+2. Call the `describe()` function on this wide data frame. 
 
 # Big Five Descriptives  
 
 There are lots of ways to create great tables of descriptives. My favorite way is using `dplyr`, but we will save that for a later lesson on creating great APA style tables in `R`. For now, we'll use a wonderfully helpful function from the `psych` package called `describe()` in conjunction with a small amount of `tidyr` to reshape the data. 
+
+1. Create a wide data frame that has a column for each personality variable in each year.  
+2. Call the `describe()` function on this wide data frame.  
 
 ```{r b5 descriptives}
 b5_soep_long  %>%
@@ -336,7 +386,16 @@ b5_soep_long %>%
 # Life Events Descriptives  
 For count variables, like life events, we need to use something slightly different. We're typically more interested in counts -- in this case, how many people experienced each life event in the 10 years we're considering?  
 
-To do this, we'll use a little bit of `dplyr` rather than the base `R` function `table()` that is often used for count data. Instead, we'll use a combination of `group_by()` and `n()` to get the counts by group. In the end, we're left with a nice little table of counts.    
+To do this, we'll use a little bit of `dplyr` rather than the base `R` function `table()` that is often used for count data. Instead, we'll use a combination of `group_by()` and `n()` to get the counts by group. In the end, we're left with a nice little table of counts.  
+
+Create a data frame of counts for each life event in `R`.  
+
+# Life Events Descriptives  
+For count variables, like life events, we need to use something slightly different. We're typically more interested in counts -- in this case, how many people experienced each life event in the 10 years we're considering?  
+
+To do this, we'll use a little bit of `dplyr` rather than the base `R` function `table()` that is often used for count data. Instead, we'll use a combination of `group_by()` and `n()` to get the counts by group. In the end, we're left with a nice little table of counts.  
+
+Create a data frame of counts for each life event in `R`.  
 
 ```{r life event descriptives}
 events_long %>%
@@ -398,6 +457,18 @@ alpha_fun <- function(df){
 Finally, we often want to look at the zero-order correlation among study variables to make sure they are performing as we think they should. 
 
 To run the correlations, we will need to have our data in wide format, so we're going to do a little bit of reshaping before we do. 
+
+Basically, we need to make a wide format data frame of the Big 5 data similarly to how we did when we called `describe()` previously. 
+
+1. Create a wide data frame of Big 5 data.  
+2. Call the `cor()` function on it.  
+3. Round the resulting matrix of correlations to 2 decimal places.  
+
+# Zero-Order Correlations  
+
+1. Create a wide data frame of Big 5 data.  
+2. Call the `cor()` function on it.  
+3. Round the resulting matrix of correlations to 2 decimal places.  
 
 ```{r correlations}
 b5_soep_long %>%
