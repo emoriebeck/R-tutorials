@@ -28,6 +28,13 @@ In this tutorial, we are going to talk data management and basic data cleaning. 
 
 # Starting Your Workflow  
 
+```{r silent packages, echo = F}
+# load packages
+library(psych)
+library(plyr)
+library(tidyverse)
+```
+
 A good workflow starts by keeping your files organized outside of R. A typical research project typically involves: 
 
 1. Data  
@@ -99,15 +106,15 @@ Here are additional columns that will make our lives easier or are applicable to
 Below, I'll load in the codebook we will use for this study, which will include all of the above columns. 
 ```{r codebook}
 # set the path
-wd <- "https://github.com/emoriebeck/R-tutorials/blob/master/ALDA/week_1_descriptives"
+wd <- "https://github.com/emoriebeck/R-tutorials/blob/master/wustl_r_workshops/workflow"
 
 download.file(
-  url      = sprintf("%s/codebook.csv?raw=true", wd), 
+  url      = sprintf("%s/data/codebook.csv?raw=true", wd), 
   destfile = destfile = sprintf("%s/data/codebook.csv", data_path)
   )
 
 # load the codebook
-(codebook <- sprintf("%s/codebook.csv", wd) %>% 
+(codebook <- sprintf("%s/data/codebook.csv", wd) %>% 
     read_csv(.) %>%
     mutate(old_name = str_to_lower(old_name)))
 ```
@@ -151,10 +158,16 @@ tibble(year = c(2005:2015)) %>%
 This code below shows how I would read in and rename a wide-format data set using the codebook I created.  
 
 ```{r load data}
+# download the file
+download.file(
+  url      = sprintf("%s/data/workflow_data.csv?raw=true", wd), 
+  destfile = destfile = sprintf("%s/data/workflow_data.csv", data_path)
+  )
+
 old.names <- codebook$old_name # get old column names
 new.names <- codebook$new_name # get new column names
 
-(soep <- url(sprintf("%s/data/week_1_data.csv?raw=true", wd)) %>% # path to data
+(soep <- sprintf("%s/data/workflow_data.csv", wd) %>% # path to data
   read_csv(.) %>% # read in data
   select(old.names) %>% # select the columns from our codebook
   setNames(new.names)) # rename columns with our new names
@@ -230,12 +243,16 @@ We also want to create a variable that indexes whether our participants experien
   filter(type == "Life Event") %>% # keep only life events
   group_by(Procedural__SID, item) %>% # group by person and event
   summarize(value = sum(value, na.rm = T), # sum up whether they experiened the event at all
-            value = ifelse(value > 1, 1, 0))) # if more than once 1, otherwise 0
+            value = ifelse(value > 1, 1, 0)) %>% # if more than once 1, otherwise 0
+   ungroup())
 ```
 
 
 # Descriptives  
-Descriptives of your data are incredibly important. They are your first line of defense against things that could go wrong later on when you run inferential stats. The help you check the distribution of your variables (e.g. non-normally distributed), look for implausible 
+Descriptives of your data are incredibly important. They are your first line of defense against things that could go wrong later on when you run inferential stats. The help you check the distribution of your variables (e.g. non-normally distributed), look for implausible values, etc. 
+
+
+## Big Five Descriptives  
 
 There are lots of ways to create great tables of descriptives. My favorite way is using `dplyr`, but we will save that for a later lesson on creating great APA style tables in `R`. For now, we'll use a wonderfully helpful function from the `psych` package called `describe()` in conjunction with a small amount of `tidyr` to reshape the data. 
 
@@ -243,9 +260,21 @@ There are lots of ways to create great tables of descriptives. My favorite way i
 b5_soep_long  %>%
   unite(tmp, item, year, sep = "_") %>% # make new column that joins item and year
   spread(tmp, value) %>% # make wide because that helps describe
-  describe(.) # call describe
+  describe(.) %>% # call describe 
+  data.frame %>%
+  rownames_to_column(var = "V")
 ```
 
+## Big Five Distributions  
+```{r}
+b5_soep_long %>%
+  ggplot(aes(x = value)) + 
+    geom_histogram() +
+    facet_grid(year ~ item) +
+    theme_classic()
+```
+
+# Life Events Descriptives  
 For count variables, like life events, we need to use something slightly different. We're typically more interested in counts -- in this case, how many people experienced each life event in the 10 years we're considering?  
 
 To do this, we'll use a little bit of `dplyr` rather than the base `R` function `table()` that is often used for count data. Instead, we'll use a combination of `group_by()` and `n()` to get the counts by group. In the end, we're left with a nice little table of counts.    
@@ -257,6 +286,19 @@ events_long %>%
   ungroup() %>%
   spread(value, N)
 ```
+
+## Life Event Plots
+```{r}
+events_long %>%
+  mutate(value = mapvalues(value, 0:1, c("No Event", "Event"))) %>%
+  ggplot(aes(x = value, fill = value)) +
+    scale_fill_manual(values = c("cornflowerblue", "gray")) +
+    geom_bar(color = "black")  +
+    facet_wrap(~item, nrow = 2) +
+    theme_classic() +
+    theme(legend.position = "bottom")
+```
+
 
 ## Scale Reliability  
 When we work with scales, it's often a good idea to check the internal consistency of your scale. If the scale isn't performing how it should be, that could critically impact the inferences you make from your data. 
