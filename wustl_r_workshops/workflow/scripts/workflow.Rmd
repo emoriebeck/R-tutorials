@@ -108,6 +108,18 @@ Here are additional columns that will make our lives easier or are applicable to
 13. **new_name**: This is a column that brings together much of the information we've already collected. It's purpose is to be the new name that we will give to the variable that is more useful and descriptive to us. This is a constructed variable that brings together others. I like to make it a combination of "category", "label", "item_name", and year using varying combos of "_" and "." that we can use later with tidyverse functions. I typically construct this variable in Excel using the `CONCATENATE()` function, but it could also be done in `R`. The reason I do it in Excel is that it makes it easier for someone who may be reviewing my codebook.  
 14. **meta**: Some datasets have a meta name, which essentially means a name that variable has across all waves to make it clear which variables are the same. They are not always useful as some data sets have meta names but no great way of extracting variables using them. But they're still typically useful to include in your codebook regardless.  
 
+### Key Takeaways from Codebook Use  
+1. Reproducibility and Transparency  
+2. Creating Composites  
+3. Keeping Track of Classes of Variables  
+4. Easier Reverse-Coding  
+5. Easier Recoding  
+6. Your future self will thank you.  
+
+Below, I will demonstrate each of these.
+
+### Read in the Codebook   
+
 Below, I'll load in the codebook we will use for this study, which will include all of the above columns. 
 ```{r codebook}
 # set the path
