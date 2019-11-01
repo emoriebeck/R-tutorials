@@ -1,5 +1,6 @@
 ---
 title: "Developing Your R Workflow"
+subtitle: "http://bit.ly/wustlr"
 author: "Emorie D Beck"
 date: "November 1, 2019"
 output:
