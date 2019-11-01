@@ -6,6 +6,7 @@ date: "November 1, 2019"
 output:
   slidy_presentation:
     df_print: paged
+    highlight: tango
     widescreen: yes
     theme: cerulean
   ioslides_presentation:
@@ -314,8 +315,8 @@ soep <- soep %>% select(-C.2005) # get rid of added column
 But personally, I don't have a desire to do that 15 times, so we can use our codebook and `dplyr` to make our lives a whole lot easier.  
 
 <strong><font color="blue">  
-Try to create composites using the functions in `dplyr` for each of the Big 5.  
-(hint: use the   soep_long   data frame and filter in only Big 5 items)  
+Try to create composites using the functions in `dplyr` (e.g. `group_by()`, `mutate_()`, `summarize_()`) for each of the Big 5.  
+(hint: use the `soep_long` data frame and `filter()` in only Big 5 items)  
 </strong></font>  
 
 #  Create Composites    
@@ -323,8 +324,8 @@ Try to create composites using the functions in `dplyr` for each of the Big 5.
 But personally, I don't have a desire to do that 15 times, so we can use our codebook and `dplyr` to make our lives a whole lot easier.  
 
 <strong><font color="blue">  
-Try to create composites using the functions in `dplyr` for each of the Big 5.  
-(hint: use the   soep_long   data frame and filter in only Big 5 items)  
+Try to create composites using the functions in `dplyr` (e.g. `group_by()`, `mutate_()`, `summarize_()`) for each of the Big 5.  
+(hint: use the `soep_long` data frame and `filter()` in only Big 5 items)  
 </strong></font>  
 
 ```{r b5 composites}
