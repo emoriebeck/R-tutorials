@@ -10,6 +10,8 @@ output:
     code_folding: show
     toc: true
     toc_float: true
+editor_options: 
+  chunk_output_type: console
 ---
 
 ```{r, echo = F}

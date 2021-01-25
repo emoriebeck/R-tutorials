@@ -142,16 +142,24 @@ data <- combine(data)
 # Reading Data: Subject-Level EMA  
 This works fine in this simple case, but where `purrr` really shines in when you need to make modifications to your data before combining, whether this be recoding, removing missing cases, or renaming variables. 
 
-But first, the simple case of reading data.  
+But first, the simple case of reading data. The code below will download a .zip file when you run it. Once, you do, navigate to your Desktop to unzip the folder. You should now be able to run the rest of the code.  
 
-```{r read data ex1, eval = F}
-data_path <- "~/Desktop/wustl_r_workshops/purrr"
+```{r get data}
+data_source <- "https://github.com/emoriebeck/R-tutorials/raw/master/wustl_r_workshops/purrr.zip"
+data_dest <- "~/Desktop/purrr.zip"
+download.file(data_source, data_dest)
+```
+
+
+```{r read data ex1, eval = T}
+data_path <- "~/Desktop/purrr"
 df1 <- tibble(
   ID = list.files(sprintf("%s/data/example_1", data_path))
   ) %>%
   mutate(data = map(ID, ~read_csv(sprintf("%s/data/example_1/%s", data_path, .)))) %>%
   unnest(data) 
 ```
+
 
 The code above creates a list of ID's from the data path (files named for each person), reads the data in using the `map()` function from `purrr`, removes the ".csv" from the ID variable, then unnests the data, resulting in a data frame for each person.  
 
@@ -166,7 +174,7 @@ We'll return to `nest()` later to demonstrate how anything you would iterate acr
 Now, we're going to combine with what we learned about last time with codebooks.  
 
 ```{r codebook}
-data_path <- "~/Desktop/wustl_r_workshops/purrr"
+data_path <- "~/Desktop/purrr"
 codebook <- sprintf("%s/data/codebook_ex1.csv", data_path) %>% read_csv(.)
 codebook
 ```
