@@ -1,0 +1,301 @@
+---
+title: "`purrr`"
+author: "Emorie D Beck"
+date: "February 21, 2019"
+output:
+  html_document:
+    theme: united
+    highlight: tango
+    df_print: paged
+    code_folding: show
+    toc: true
+    toc_float: true
+---
+
+```{r, echo = F}
+knitr::opts_chunk$set(echo = TRUE, message = F, warning = F, error = F,
+                     class.source = "code-style")
+```
+
+# Iteration  
+Iteration is everywhere. It underpins much of mathematics and statistics. If you've ever seen the $\Sigma$ symbol, then you've seen (and probably used) iteration.  
+
+Reasons for iteration:  
+- reading in multiple files from a directory  
+- running the same operation multiple times  
+- running different combinations of the same model  
+- creating similar figures / tables / outputs  
+
+```{r packages, echo=F}
+library(psych)
+library(knitr)
+library(kableExtra)
+library(lme4)
+library(broom.mixed)
+library(plyr)
+library(tidyverse)
+```
+
+## `for` loops  
+Enter `for` loops. `for` loops are the "OG" form of iteration in computer science. The basic syntax is below. Basically, we can use a for loop to loop through and print a series of things.
+
+```{r basic loop}
+for(i in letters[1:5]){
+  print(i)
+}
+```
+
+The code above "loops" through 5 times, printing the iteration letter.  
+
+## `_apply()` family  
+A somewhat faster version of `for` loops comes from the `_apply()` family of functions, including: `apply()`, `lapply()`, `sapply()`, and `mapply()`. Unlike `for` loops, these are vectorized, which makes them more efficient.  
+
+```{r apply functions}
+lapply(letters[1:5], print)
+sapply(letters[1:5], print)
+mapply(print, letters[1:5])
+```
+
+## `purrr` and `_map_()` functions  
+Today, though, we'll focus on the `map()` family of functions, which is the functions through which `purrr` iterates.  
+
+```{r map functions}
+map(letters[1:5], print)
+```
+
+**For a more thorough comparison of `for` loops, the `_apply()` family, and `_map_()` functions, see https://jennybc.github.io/purrr-tutorial/**
+
+## `purrr` and `_map_()` predicates  
+Today, though, we'll focus on the `map()` family of functions, which is the functions through which `purrr` iterates.  
+
+```{r map functions 2, eval = F}
+map(letters[1:5], print)
+```
+
+Note that this returns a list, which we may not always want. With `purrr`, we can change the kind of output of `map()` by adding a predicate, like `lgl`, `dbl`, `chr`, and `df`. So in the example above, we may have wanted just the characters to print. To do that we'd call `map_chr()`:  
+
+```{r basic map_chr}
+map_chr(letters[1:5], print)
+```
+
+Note that it also returns the concatenated character vector as well as printing each letter individually (i.e. iteratively).  
+
+## `purrr` and `_map_()` antecedents  
+
+- Single mapping: `map_()`  
+- Parallel (2) mapping(s): `map2_()`  
+- 3 or more mappings: `pmap_()`  
+
+```{r}
+map2_chr(letters[1:5], 1:5, paste)
+```
+
+Note here that we can use `map2()` and `pmap()` with the predicates from above.  
+
+# Use Cases  
+
+1. Reading Data  
+2. Running Models  
+3. (Plotting Figures - Kendra Smith, March 20)   
+4. (Creating Tables - Emorie Beck (Me), April 17)  
+
+## Reading Data  
+There are a number of different cases where `purrr` and `map()` maybe useful for reading in data including: 
+
+- subject-level files for an experimental task  
+- subject- and task-level files for an experimental task
+- EMA data  
+- longitudinal data  
+- web scraping and text mining  
+
+## Reading Data: Subject-Level EMA  
+For this first example, I'll show you how this would look with a `for` loop before I show you how it looks with `purrr`.
+
+Assuming you have all the data in a single folder and the format is reasonably similar, you have the following basic syntax:  
+
+
+```{r simple reading loop, eval = F}
+data_path <- ""
+files <- list.files(data_path)
+data <- list()
+for(i in files){
+  data[[i]] <- read.csv(i, stringsAsFactors = F)
+}
+data <- combine(data)
+```
+
+This works fine in this simple case, but where `purrr` really shines in when you need to make modifications to your data before combining, whether this be recoding, removing missing cases, or renaming variables. 
+
+But first, the simple case of reading data.  
+
+```{r read data ex1, eval = T}
+data_path <- "~/Desktop/wustl_r_workshops/purrr"
+df1 <- tibble(
+  ID = list.files(sprintf("%s/data/example_1", data_path))
+  ) %>%
+  mutate(data = map(ID, ~read_csv(sprintf("%s/data/example_1/%s", data_path, .)))) %>%
+  unnest(data) 
+```
+
+The code above creates a list of ID's from the data path (files named for each person), reads the data in using the `map()` function from `purrr`, removes the ".csv" from the ID variable, then unnests the data, resulting in a data frame for each person.  
+
+# List Columns and the Power of `purrr`  
+On the previous slide, we saw a data frame **inside** of a data frame. This is called a list column within a nested data frame.  
+
+In this case, we created a list column using map, but one of the best things about `purrr` is how it combines with the `nest()` and `unnest()` functions from the `tidyr` package.  
+
+We'll return to `nest()` later to demonstrate how anything you would iterate across is also something we can `nest()` by in long format data frames.  
+
+# Exercise: Reading in Subject-Level Data  
+
+```{r codebook}
+data_path <- "~/Desktop/wustl_r_workshops/purrr"
+codebook <- sprintf("%s/data/codebook_ex1.csv", data_path) %>% read_csv(.)
+codebook
+```
+
+Now, we're going to combine with what we learned about last time with codebooks.  
+
+Now, that we have a codebook, what are the next steps?  
+1. pull old names in raw data from codebook  
+2. pull new names from codebook  
+3. select columns from codebook in loaded data  
+4. rename columns with new names  
+
+# Exercise: Reading in Subject-Level Data  
+```{r read data complex ex1, eval = T}
+old.names <- codebook$old_name # pull old names in raw data from codebook  
+new.names <- codebook$new_name # pull new names from codebook  
+df1 <- tibble(
+  ID = list.files(sprintf("%s/data/example_1", data_path))
+  ) %>%
+  mutate(data = map(ID, ~read_csv(sprintf("%s/data/example_1/%s", data_path, .)))) %>%
+  unnest(data) %>%
+  select(ID, count, one_of(old.names)) %>% # select columns from codebook in loaded data  
+  setNames(c("ID", "count", new.names)) # rename columns with new names  
+df1
+```
+
+
+## Descriptives: Within-Person Correlations  
+With these kinds of data, the first thing, we may want to do is look at within-person correlations, which we can do with `purrr`.  
+
+```{r}
+nested.r <- df1 %>%
+  group_by(ID) %>%
+  nest() %>%
+  mutate(r = map(data, ~cor((.) %>% select(-count), use = "pairwise")))
+nested.r
+```
+
+We can access it like a list: 
+
+```{r}
+nested.r$data[[1]]
+```
+
+## Models  
+
+To run separate models for each trait, we'll need to reshape our data.  
+
+```{r}
+df.long <- df1 %>%
+  gather(key = item, value = value, -count, -ID, -satisfaction, na.rm = T)
+df.long
+```
+
+To create composites, we'll separate traits from items.  
+```{r}
+df.long <- df1 %>%
+  gather(key = item, value = value, -count, -ID, -satisfaction, na.rm = T) %>%
+  separate(item, c("Trait",  "item"), sep = "_")
+df.long
+```
+
+
+To create composites, we'll then `group_by()` trait, count, and ID and calculate the composites using `summarize()`  
+
+```{r}
+df.long <- df1 %>%
+  gather(key = item, value = value, -count, -ID, -satisfaction, na.rm = T) %>%
+  separate(item, c("Trait",  "item"), sep = "_") %>%
+  group_by(ID, count, Trait) %>%
+  summarize(value = mean(value)) 
+df.long
+```
+
+Then we'll get within-person centered values using `scale()`.  
+```{r}
+df.long <- df1 %>%
+  gather(key = item, value = value, -count, -ID, -satisfaction, na.rm = T) %>%
+  separate(item, c("Trait",  "item"), sep = "_") %>%
+  group_by(ID, count, Trait, satisfaction) %>%
+  summarize(value = mean(value)) %>%
+  group_by(ID, Trait) %>%
+  mutate(value_c = as.numeric(scale(value, center = T, scale = F)))
+df.long
+```
+
+And grand-mean centered within-person averages  
+```{r}
+df.long <- df.long %>%
+  group_by(ID, Trait) %>%
+  summarize(value_gmc = mean(value)) %>%
+  group_by(Trait) %>%
+  mutate(value_gmc = as.numeric(scale(value_gmc, center = T, scale = F))) %>%
+  full_join(df.long)
+df.long
+```
+
+### Run Models  
+And now we are ready to run our models. But first, we'll `nest()` our data.  
+```{r}
+nested.mods <- df.long %>%
+  group_by(Trait) %>%
+  nest()
+nested.mods
+```
+
+And now run the models.  
+```{r}
+nested.mods <- df.long %>%
+  group_by(Trait) %>%
+  nest() %>%
+  mutate(model = map(data, ~lmer(satisfaction ~ value_c * value_gmc + (1 | ID), data = .)))
+nested.mods
+```
+
+
+And get data frames of the results:  
+```{r}
+nested.mods <- df.long %>%
+  group_by(Trait) %>%
+  nest() %>%
+  mutate(model = map(data, ~lmer(satisfaction ~ value_c * value_gmc + (1 | ID), data = .)),
+         tidy = map(model, ~tidy(., conf.int = T)))
+nested.mods
+```
+
+Which we can print into pretty data frames  
+```{r}
+nested.mods %>%
+  select(Trait, tidy) %>%
+  unnest(tidy)
+```
+
+### Plotting  
+Which we can pretty easily turn into plots: 
+```{r, fig.width= 3, fig.align='center'}
+nested.mods %>%
+  select(Trait, tidy) %>%
+  unnest(tidy) %>%
+  filter(term == "value_c") %>%
+  ggplot(aes(x = Trait, y = estimate, ymin = conf.low, ymax = conf.high)) +
+    geom_errorbar(position = "dodge", width = .1) +
+    geom_point(aes(color = Trait), size = 2) +
+    geom_hline(aes(yintercept = 0), linetype = "dashed") +
+    labs(y = "Personality State-\nSatisfaction Association") +
+    coord_flip() +
+    theme_classic() +
+    theme(legend.position = "none")
+```
