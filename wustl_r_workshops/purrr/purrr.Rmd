@@ -126,10 +126,17 @@ data <- combine(data)
 
 This works fine in this simple case, but where `purrr` really shines in when you need to make modifications to your data before combining, whether this be recoding, removing missing cases, or renaming variables. 
 
-But first, the simple case of reading data.  
+But first, the simple case of reading data. The code below will download a .zip file when you run it. Once, you do, navigate to your Desktop to unzip the folder. You should now be able to run the rest of the code.    
+
+```{r get data}
+data_source <- "https://github.com/emoriebeck/R-tutorials/raw/master/wustl_r_workshops/purrr.zip"
+data_dest <- "~/Desktop/purrr.zip"
+download.file(data_source, data_dest)
+```
+
 
 ```{r read data ex1, eval = T}
-data_path <- "~/Desktop/wustl_r_workshops/purrr"
+data_path <- "~/Desktop/purrr"
 df1 <- tibble(
   ID = list.files(sprintf("%s/data/example_1", data_path))
   ) %>%
@@ -149,7 +156,7 @@ We'll return to `nest()` later to demonstrate how anything you would iterate acr
 # Exercise: Reading in Subject-Level Data  
 
 ```{r codebook}
-data_path <- "~/Desktop/wustl_r_workshops/purrr"
+data_path <- "~/Desktop/purrr"
 codebook <- sprintf("%s/data/codebook_ex1.csv", data_path) %>% read_csv(.)
 codebook
 ```
