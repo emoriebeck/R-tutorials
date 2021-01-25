@@ -68,6 +68,14 @@ The data we'll use fall into three categories:
 2. **Outcomes:** Moving in with a partner, marriage, divorce, and child birth. These were cleaned, coded as 1 (occurred) or 0 (did not occur) according to whether an outcome occurred for each individual or not *after* each possible measured personality year. Moreover, people who experienced these outcomes prior to the target personality year are excluded.  
 3. **Covariates:** Age, gender (0 = male, 1 = female, education (0 = high school or below, 1 = college, 2 = higher than college), gross wages, self-rated health, smoking (0 = never smoked 1 = ever smoked), exercise, BMI, religion, parental education, and parental occupational prestige (ISEI). Each of these were composited for all available data up to the measured personality years.   
 
+First, the code below will download a .zip file when you run it. Once, you do, navigate to your Desktop to unzip the folder. You should now be able to run the rest of the code.  
+
+```{r get data}
+data_source <- "https://github.com/emoriebeck/R-tutorials/raw/master/wustl_r_workshops/tables.zip"
+data_dest <- "~/Desktop/tables.zip"
+download.file(data_source, data_dest)
+```
+
 ```{r}
 wd <- "~/Desktop/tables"
 

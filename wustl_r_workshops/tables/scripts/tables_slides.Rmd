@@ -86,6 +86,12 @@ The data we'll use fall into three categories:
 3. **Covariates:** Age, gender (0 = male, 1 = female, education (0 = high school or below, 1 = college, 2 = higher than college), gross wages, self-rated health, smoking (0 = never smoked 1 = ever smoked), exercise, BMI, religion, parental education, and parental occupational prestige (ISEI). Each of these were composited for all available data up to the measured personality years.  
 
 # Data  
+```{r get data}
+data_source <- "https://github.com/emoriebeck/R-tutorials/raw/master/wustl_r_workshops/tables.zip"
+data_dest <- "~/Desktop/tables.zip"
+download.file(data_source, data_dest)
+```
+
 ```{r}
 wd <- "~/Desktop/tables"
 
