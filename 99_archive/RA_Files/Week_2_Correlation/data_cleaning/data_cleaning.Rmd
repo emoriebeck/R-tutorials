@@ -1,0 +1,122 @@
+---
+title: "Data Cleaning"
+author: "Emorie Beck"
+date: "`r Sys.setlocale('LC_TIME', 'C'); format(Sys.time(), '%d\\\\. %B %Y')`"
+output:
+  html_document:
+    theme: united
+    highlight: tango
+    df_print: paged
+    code_folding: show
+    toc: true
+    toc_float: true
+    toc_depth: 2
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introduction  
+This week, we're going to talk about correlations in R. But just as importantly, we are going to get you started on perhaps the most important skill in psychological research -- working with data. Follow along below.  
+
+# Workspace
+First, we start by loading the packages and data we'll need. 
+
+## Packages
+```{r}
+# add packages here. I'd suggest starting with tidyverse, but there are others you 
+# may want to add as well
+# library(package)
+```
+
+## Load Data
+```{r}
+# first, let's set the path to the data below. This will be the path to the folder on
+# your computer. On a mac, the root directory can be accessed by including "~/" in your
+# file path
+# example wd <- "~/Dropbox/Summer 2018"
+# add your file path below
+
+
+
+# now let's load the data. I like to use something like the line below, which uses 
+# the `sprintf()` function to merge the file path with the name of the file
+# file <- sprintf("%s/data/target_w1.csv", wd)
+# pairsW1 <- read.csv(file, stringsAsFactors = F)
+# do this below
+
+
+
+```
+
+# Preparation and Data Cleaning
+Now that the data are loaded, we usually need to make modifications, keeping some columns, removing others, creating composites, apply exclusion criteria, etc.
+
+## Descriptives  
+To do this, it's usually smart to look at some descriptives of your data, especially if you aren't very familiar with it. 
+
+One useful function for this is the `describe()` function in the `psych` package  
+```{r}
+# try using the describe function in the chunk below: 
+# describe(pairsW1)
+# are there any variables that stand out as weird?
+```
+
+## Selection and Renaming  
+When I work with data, I'm usually pulling a few variables from data sets that may contain thousands of variables. I often find the easiest way to do this is to use the codebooks associated with the study to create an Excel sheet that lists a number of properties, including the original column name of the item in the data, a new name that I'd like to give it, the purpose of the variable (e.g. outcome variable, predictor variable, covariate, etc.), whether I need to reverse score it, the scale participants responded on, what values represent missing values (this will vary by data set). See the example I've provided and create your own codebook of variables you find interesting.  
+```{r}
+# load the codebook
+# codebook <- sprintf("%s/codebook.xlsx")
+# codebook <- readxl::read_xlsx(codebook)
+
+# Now we need to find a way to match the variables in the codebook with the variables in 
+# your data. I'm not going to give you explicit instructions. Struggle a bit, and try 
+# different ways. I'll give you a couple of hints below 
+
+# old_names <- codebook$old_names
+# new_names <- codebook$new_names
+
+# somehow, you need to subset your data so only the variables in your codebook are left 
+# in your data frame. Refer to the basics of subsetting data in R (e.g. df[,cols]) and 
+# remember what you learned in the intro to tidyverse data camp course
+
+# then you need to rename those variables as you've specified in your codebook
+# functions like `colnames()` and `setNames()` might be useful here
+```
+
+## Handle Missing Values
+We want to make sure R recognizes missing values as missing. Below, you're going to need to make sure that missing values are specified as NA, not as another value.
+```{r}
+# missings are coded as -7 in the data. Change these to NA values.
+
+```
+
+# Recode Variables  
+Almost always, there are variables that are not coded how we want. It could be an ordinal or nominal scale that has levels we don't want or needs reverse coded. It could be we want to collapse variables. Whatever it is, it's important to do.  
+```{r}
+# recode a nominal variable with 3+ levels into a nominal variable with 2 levels
+# try the `recode()` function and also refer to base code techniques  
+
+# now reverse code items that need reverse coded 
+# hint: you can create a vector of keys from your codebook
+# hint: you could also try moving your data from wide to long format then using full_join to merge your codebook with your data 
+# then you can use the psych package function `reverse.code()` to reverse code your data
+```
+
+
+## Create composites  
+Usually, there are variables that we need to composite. It could be a personality scale, it could be the same item answered over time. Whatever it is, you'll do it a lot. There are lots of ways to go about it. Below, you should try to do this a couple of different ways and see if you achieve the same results.
+```{r}
+# first, try the dplyr way: get your data in "tidy" format, use the 
+# `group_by()` function to group by person, scale, etc., then use the 
+# `summarize()` function to create the composites
+
+# Now, try the base R way. 
+# hint: try using the function `rowMeans()`. You can select multiple columns using 
+# the `cbind()` function within `rowMeans()`. Don't forget to set na.rm = T
+
+```
+
+
+

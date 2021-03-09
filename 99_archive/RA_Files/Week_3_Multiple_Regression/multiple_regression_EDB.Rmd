@@ -1,0 +1,555 @@
+---
+title: "Multiple Regression"
+author: 
+  - "Emorie D Beck"
+date: "`r Sys.setlocale('LC_TIME', 'C'); format(Sys.time(), '%d\\\\. %B %Y')`"
+output:
+  html_document:
+    theme: united
+    highlight: tango
+    df_print: paged
+    code_folding: show
+    toc: true
+    toc_float: true
+    toc_depth: 2
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Workspace 
+
+## Packages
+```{r}
+library(psych)
+library(broom)
+library(plyr)
+library(tidyverse)
+```
+
+## Data  
+```{r}
+wd <- "https://github.com/emoriebeck/R-tutorials/raw/master/RA_Files/Week_3_Multiple_Regression"
+load(url(sprintf("%s/SAPAdata18aug2010thru7feb2017.rdata", wd)))
+ipip100 <- SAPAdata18aug2010thru7feb2017 %>% tbl_df
+```
+
+These data are organized differently than others we've worked with in the past. There are going to be 4 key objects once you load them: 
+
+1. IPIP300: data frame containing the data for the full IPIP300.  
+2. ItemInfo: data frame listing a bunch of different possible items as well as the inventories to which they belong (there are some overlapping items across scales).  
+3. ItemLists: List of items for a bunch of different scales. 
+4. keys.list: keys for different scales for reverse coding.  
+
+Let's get the info we need to do this.  
+
+To start, let's trim out data frame. 
+```{r}
+# create a vector of the old item names we need. 
+# old_items <- ItemLists$IPIP100
+old_items <- c(ItemLists$IPIP100, "q_55")
+
+# remove all columns except the items for the IPIP 100 and all the background variables 
+
+# tidyverse
+ipip100 <- ipip100 %>% select(RID:EthDiv, old_items)
+# equivalent: ipip100 <- ipip100 %>% select(contains("^q_"), one_of(old_items))
+
+# base R
+dem_items <- colnames(ipip100)[!(grepl("^q_", colnames(ipip100)))]
+ipip100 <- ipip100[, c(dem_items, old_items)]
+```
+
+## Descriptives
+```{r}
+# run the descriptives and check variable ranges
+describe(ipip100)
+```
+
+Now that we have all the variables, we need to give them useful names. To do this, we need to mix some info from different objects. This is going to be hard. I'm going to tell you what pieces you need, but I'm going to leave it up to you to try out different ways to bring them all together into a data frame. Think about how we created the codebook last week. You're aiming to create a data frame that has those same elements.  
+
+It should end up looking something like: 
+
+old\_item   |   new\_item     | item\_text    | keys    
+----------  | --------------  | ------------- | ---------------
+
+```{r}
+# method 1: ItemInfo
+# get the original item names from the ItemLists object 
+
+# method 2: ItemInfo
+# add the question numbers by saving the row names
+(codebook <- ItemInfo %>% mutate(old_item = rownames(.)))
+# hint: filter out the rows in the IPIP100 column that are null
+(codebook <- codebook %>% filter(!(IPIP100 == "NULL")))
+# select the only columns we need (Item, IPIP100, old_item)
+(codebook <- codebook %>% select(Item, IPIP100, old_item))
+
+# give them new names
+(codebook <- codebook %>% 
+  group_by(IPIP100) %>% 
+  mutate(new_item = paste(IPIP100, 1:n(), sep = "_")) %>%
+  arrange(new_item))
+
+# get the keys
+(keys <- tibble(
+  old_item = c(keys.list$IPIP100agreeableness20,
+           keys.list$IPIP100conscientiousness20,
+           keys.list$IPIP100extraversion20,
+           keys.list$IPIP100EmotionalStability20,
+           keys.list$IPIP100intellect20)
+  ) %>%
+  mutate(key = ifelse(grepl("-", old_item), -1, 1),
+         old_item = str_remove(old_item, "-"))) 
+
+# there's one missing key (a mistake in the keys.list object), so we'll add it in manually
+keys <- keys %>% bind_rows(tibble(old_item = "q_55", key = 1))
+
+# add the keys 
+(codebook <- codebook %>% full_join(keys))
+
+ipip100 <- ipip100 %>% tbl_df %>%
+  select(dem_items, codebook$old_item) %>%
+  setNames(c(dem_items, codebook$new_item))
+```
+
+## Check Missings 
+How are missings coded in this data set? Do we need to make any changes to how they are coded?  
+```{r}
+# missings are coded as NA, so we're good
+```
+
+## Recode Variables  
+You should have your keys. Reverse code the items that need reverse coded. 
+```{r}
+keys  <- codebook$key[codebook$key == -1]
+items <- codebook$new_item[codebook$key == -1]
+ipip100[,items] <- reverse.code(keys, ipip100[,items], mini = 1, maxi = 5)
+```
+
+## Create composites
+For these data, we have lots of items, so we don't just want to create composites for the Big 5, we also want to create composites for the facets of each of the Big 5. Use the methods we learned before to do so.  
+```{r}
+# These data are large and messy, so try the base R way. 
+# hint: try using the function `rowMeans()`. You can select multiple columns using 
+# the `cbind()` function within `rowMeans()`. Don't forget to set na.rm = T
+
+# personality
+items <- codebook$new_item[grepl("IPIP100:E_", codebook$new_item)]
+ipip100$ipip100.E <- rowMeans(ipip100[,items], na.rm = T)
+
+items <- codebook$new_item[grepl("IPIP100:A", codebook$new_item)]
+ipip100$ipip100.A <- rowMeans(ipip100[,items], na.rm = T)
+
+items <- codebook$new_item[grepl("IPIP100:C", codebook$new_item)]
+ipip100$ipip100.C <- rowMeans(ipip100[,items], na.rm = T)
+
+items <- codebook$new_item[grepl("IPIP100:ES", codebook$new_item)]
+ipip100$ipip100.N <- rowMeans(ipip100[,items], na.rm = T)
+
+items <- codebook$new_item[grepl("IPIP100:I", codebook$new_item)]
+ipip100$ipip100.O <- rowMeans(ipip100[,items], na.rm = T)
+
+ipip100 <- ipip100 %>% 
+  mutate_all(funs(mapvalues(., from = c(NaN, Inf, -Inf), to = c(NA, NA, NA), warn_missing = F)))
+```
+
+# Multiple Regression
+## Zero-Order Correlations
+Before we run a regression, we should always look at the zero-order correlations among the predictors and outcomes. For these data, we want to look at the relationship between age and personality, so correlate the age column with the composites for each of the Big 5 and their facets.  
+```{r}
+# run the correlations
+cor(select(ipip100, age, ipip100.E:ipip100.O), use = "pairwise")
+```
+
+## Run the Simple Regressions  
+Now, run a regression model for each of the Big 5 and their facets in the form `lm(personality ~ age, data = ipip100)`.
+```{r}
+ipip100.trim <- ipip100 %>% 
+  select(RID, age, gender, BMI, occPrestige, ipip100.E:ipip100.O) %>%
+  filter(complete.cases(.))
+
+# fitE1 <- lm(IPIP100.E ~ age, data = ipip100)
+# summary(fitE1)
+fitE1 <- lm(ipip100.E ~ age, data = ipip100.trim)
+fitA1 <- lm(ipip100.A ~ age, data = ipip100.trim)
+fitC1 <- lm(ipip100.C ~ age, data = ipip100.trim)
+fitN1 <- lm(ipip100.N ~ age, data = ipip100.trim)
+fitO1 <- lm(ipip100.O ~ age, data = ipip100.trim)
+```
+
+
+## Run the Multiple Regressions  
+We often want to control for other variables. There are a bunch of possibilities in the data. Choose 3. Rerun the models again 3 times, in each case adding one of your chosen 3 covariates. Examine how the results change when you add these covariates.
+
+```{r}
+# fitE2 <- lm(IPIP100.E ~ age + gender, data = ipip100)
+# summary(fitE1)
+
+# gender
+fitE2.1 <- lm(ipip100.E ~ age + gender, data = ipip100.trim)
+summary(fitE2.1)
+fitA2.1 <- lm(ipip100.A ~ age + gender, data = ipip100.trim)
+summary(fitA2.1)
+fitC2.1 <- lm(ipip100.C ~ age + gender, data = ipip100.trim)
+summary(fitC2.1)
+fitN2.1 <- lm(ipip100.N ~ age + gender, data = ipip100.trim)
+summary(fitN2.1)
+fitO2.1 <- lm(ipip100.O ~ age + gender, data = ipip100.trim)
+summary(fitO2.1)
+
+# BMI
+fitE2.2 <- lm(ipip100.E ~ age + BMI, data = ipip100.trim)
+summary(fitE2.2)
+fitA2.2 <- lm(ipip100.A ~ age + BMI, data = ipip100.trim)
+summary(fitA2.2)
+fitC2.2 <- lm(ipip100.C ~ age + BMI, data = ipip100.trim)
+summary(fitC2.2)
+fitN2.2 <- lm(ipip100.N ~ age + BMI, data = ipip100.trim)
+summary(fitN2.2)
+fitO2.2 <- lm(ipip100.O ~ age + BMI, data = ipip100.trim)
+summary(fitO2.2)
+
+# occupational prestige
+fitE2.3 <- lm(ipip100.E ~ age + occPrestige, data = ipip100.trim)
+summary(fitE2.3)
+fitA2.3 <- lm(ipip100.A ~ age + occPrestige, data = ipip100.trim)
+summary(fitA2.3)
+fitC2.3 <- lm(ipip100.C ~ age + occPrestige, data = ipip100.trim)
+summary(fitC2.3)
+fitN2.3 <- lm(ipip100.N ~ age + occPrestige, data = ipip100.trim)
+summary(fitN2.3)
+fitO2.3 <- lm(ipip100.O ~ age + occPrestige, data = ipip100.trim)
+summary(fitO2.3)
+```
+
+We can formalize differences between models by doing a likelihood ratio test. In R, you do this with the `anova()` function. This can only be done with nested models, which means that you can compare your model without covariates with each of the models that have one additional covariate, but you can't compare the models with covariates to each other.  
+```{r}
+# anova(fitE1, fitE2)
+# Extraversion
+anova(fitE1, fitE2.1)
+anova(fitE1, fitE2.2)
+anova(fitE1, fitE2.3)
+
+# Agreeableness
+anova(fitA1, fitA2.1)
+anova(fitA1, fitA2.2)
+anova(fitA1, fitA2.3)
+
+# Conscientiousness
+anova(fitC1, fitC2.1)
+anova(fitC1, fitC2.2)
+anova(fitC1, fitC2.3)
+
+# Neuroticism
+anova(fitN1, fitN2.1)
+anova(fitN1, fitN2.2)
+anova(fitN1, fitN2.3)
+
+# Openness
+anova(fitO1, fitO2.1)
+anova(fitO1, fitO2.2)
+anova(fitO1, fitO2.3)
+```
+
+Now, add all 3 covariates. Do any of the relationships change?
+```{r}
+# fitE5 <- lm(IPIP100.E ~ age + CV1 + CV2 + CV3, data = ipip100)
+# CV = covariate 
+fitE3 <- lm(ipip100.E ~ age + gender + BMI + occPrestige, data = ipip100.trim)
+summary(fitE3)
+fitA3 <- lm(ipip100.A ~ age + gender + BMI + occPrestige, data = ipip100.trim)
+summary(fitA3)
+fitC3 <- lm(ipip100.C ~ age + gender + BMI + occPrestige, data = ipip100.trim)
+summary(fitC3)
+fitN3 <- lm(ipip100.N ~ age + gender + BMI + occPrestige, data = ipip100.trim)
+summary(fitN3)
+fitO3 <- lm(ipip100.O ~ age + gender + BMI + occPrestige, data = ipip100.trim)
+summary(fitO3)
+
+# only one covariate isn't significant -- occupational prestige for Conscientiousness
+```
+
+Use the `anova()` function to compare the model with 3 covariates to the models with only age and with age + 1 covariate. Does adding the covariates improve the model.  
+```{r}
+anova(fitE1, fitE3)
+anova(fitA1, fitA3)
+anova(fitC1, fitC3)
+anova(fitN1, fitN3)
+anova(fitO1, fitO3)
+
+# all the covariates improve fit
+```
+
+# Reporting Results  
+When we run these models, it's always with a goal in mind. Models are great tools for summarizing complicated data in a comprehensible way, but the onus remains on us to get the models we run into a form that can be interpretable by lay audiences. So, we're going to start practicing that by: 
+
+1. Practicing writing an "analysis plan" section of a multiple regression analysis.  
+2. Creating a table of results.  
+3. Creating a figure of results. 
+4. Practicing writing a write-up of a multiple regression analysis.  
+
+## Practice Analysis Plan Section  
+The analysis plan section of a paper (typically a sub-heading of the Method section) is a place to geek out. This is where you get to talk stats (and often `R`!). Typically, this section summarizes the statistical analyses that were done to the data. The earlier sub-sections of the Method section should describe things like the scales you're using and the data collection procedure. 
+
+Try to be as organized as possible when writing this section. 
+
+Start with some sort of summary of the procedure, like "The analyses proceded in three parts. First, we examined the zero-order relationships between all variables. Then, we regressed X on Y. Finally, we regressed X on Y, controlling for W and Z."
+ 
+ <!-- write your summary below -->
+ 
+After you summarize the results, you typically then launch into more details on each of the analyses in the summary. So for example, if you were describing regressing X on Y, you might describe what that was in more detail, like "We conducted a series of simple linear regressions predicting life satisfaction from personality. To do so, we separately regressed each of the Big 5 on life satisfaction."
+
+Basically, you want this section to give enough detail that someone who read the paper should be more or less able to reproduce your analyses. 
+
+<!-- write your analysis plan below -->
+
+To test whether there are age differences in the Big 5 across the lifespan, we ran a series of simple linear regressions predicting personality from participant age. Next, we added gender, BMI, and occupational prestige separately to test whether age predicted personality across the lifespan, controlling for each covariate. Finally, we tested whether age predicted personality across the lifespan, controlling for all covariate simultaneously.  
+
+Finally, we want to wrap up that section by providing some details on *how* the analyses were conducted. Sometimes, this will be interwoven within the earlier parts of this section, particularly if you are using different R packages for different analyses (for example, if you use base R to run simple regressions and the `lme4` package to run longitudinal models).
+
+<!-- write your "how" section below -->
+<!-- this is a pretty simple one. We aren't doing anything fancy -->
+
+The analyses were conducted in `r sessionInfo()$R.version$version.string`.  
+
+## Creating Tables in R  
+Table creation is something we'll return to. I love making tables in R. dplyr is perfect for creating reproducable tables on raw results without ever having to copy or paste numbers again. This is awesome because often things will happen that will result in (often very slight) changes in the results. No one wants to copy and paste several hundred numbers.  
+
+This week, we are going to do this an annoying and complicated way. In the next couple of weeks, I'll show you how to do this much more efficiently. I've also written several functions that you can use, but I won't give you those until I've made you more or less learn how they work already.  
+
+```{r}
+# start by getting the tidy summaries of your models you ran above. 
+# For ease, let's just use the models with the 3 covariates in addition to age.  
+# tidy.E1 <- tidy(fitE)
+
+tidy.E <- tidy(fitE3)
+tidy.A <- tidy(fitA3)
+tidy.C <- tidy(fitC3)
+tidy.N <- tidy(fitN3)
+tidy.O <- tidy(fitO3)
+```
+
+Once you've got all of these, we need to figure out a way to join them together. To do this, we'll use the `full_join()` function from the tidyverse package. Essentially, this function takes data frames and joins them together by common variables. To start with a simple example, consider a data frame like the one below: 
+
+```{r}
+# create a data frame for person 1
+(person1 <- tibble(
+  ID = rep(1, 3),
+  time = 1:3,
+  value = ceiling(rnorm(3, mean = 3, sd = 1))
+))
+
+# create a data frame for person 2
+(person2 <- tibble(
+  ID = rep(2, 3),
+  time = 1:3,
+  value = ceiling(rnorm(3, mean = 3, sd = 1))
+))
+```
+
+Both of these data frames have the same columns, but each row is unique. But we usually want all our data in one data frame. So let's join the data frames together. 
+
+```{r}
+# join these together using full_join() 
+# call the resulting data frame ex.dat
+ex.dat <- person1 %>% full_join(person2)
+```
+
+But what would happen if our columns weren't identical? Let's start with an example where we have some sort of reference data frame, like one that contains demographic data.  
+```{r}
+(dem.dat <- tribble(
+  ~ID,    ~age,
+    1,      25,
+    2,      30
+))
+```
+
+What happens when you join this data frame with the `ex.dat` data frame?
+```{r}
+# join these together using full_join() 
+# call the resulting data frame ex.dat.dem
+ex.dat.dem <- ex.dat %>% full_join(dem.dat)
+```
+
+What about if I had their ages at different points? 
+
+```{r}
+(dem.dat <- tibble(
+  ID = rep(c(1,2), each = 3),
+  age = c(25+0:2, 30+0:2)
+))
+```
+
+Join the `ex.dat` data frame with the new `dem.dat` data frame. 
+
+```{r}
+# # join these together using full_join() 
+# call the resulting data frame ex.dat.dem2
+ex.dat.dem2 <- ex.dat %>% full_join(dem.dat)
+```
+
+Does the resulting data frame look right? Can you think of how you'd fix it?
+
+```{r}
+ex.dat.dem2 <- ex.dat %>% full_join(dem.dat %>% group_by(ID) %>% filter(age == min(age)))
+```
+
+-----
+
+Back to creating tables. The example above was to highlight that the key to making these tables is to make sure we are very careful about what columns we have and what we name them. 
+
+Look at the columns in your tidy model results. Can you think of what column(s) you need to add in order to make sure each model is identifiable in the final data frame? (hint: what's different about each model?)  
+```{r}
+# add the needed column(s) below 
+# try using the $ operator or using mutate() from within dplyr  
+tidy.E$model <- "Extraversion"
+tidy.A$model <- "Agreeableness"
+tidy.C$model <- "Conscientiousness"
+tidy.N$model <- "Neuroticism"
+tidy.O$model <- "Openness"
+```
+
+Now you're ready to join the tidy model results together. Join them all togehter below using a series of `full_join()` calls. Note that full_join can only join together 2 data frames at a time, so you'll have to join 2 together, save, the results, join another to the already joined data frames, and repeat until there's no more data frames. 
+
+```{r}
+# join your tidy models together here 
+# call it m_results
+(m_results <- tidy.E %>%
+  full_join(tidy.A) %>%
+  full_join(tidy.C) %>%
+  full_join(tidy.N) %>%
+  full_join(tidy.O) )
+```
+
+Look at the columns in the resulting data frame. Do you remember from reading papers which columns we need here and which we don't? (Hint: this is two numeric columns, and 3 text columns).  
+
+This should leave you with a data frame that looks something like this:  
+```{r}
+# model   | term    | estimate  | se      | p 
+# ------- | ------  | --------- | ------  | -------
+
+(m_results <- m_results %>% select(model, term, estimate, std.error, p.value))
+```
+
+We now have all the info we need. But if you look at a paper, this table doesn't look like the ones you'd see there because we need to rearrange the info. I'm going to basically give you this code in chunks. Work through it slowly to make sure you understand it. 
+
+To start, we need to give ourselves better names for term. 
+```{r}
+(m_results <- m_results %>% 
+  mutate(term = str_remove_all(term, "[()]")))
+```
+
+Now, we need to format estimate, se, and p into rounded forms (2 decimal points per APA style). 
+```{r}
+(m_results <- m_results %>%
+  mutate_at(vars(estimate, std.error, p.value), funs(sprintf("%.2f", .))))
+```
+
+Now, we need to rearrange the data. In the end, I want a data frame with 7 columns (Trait, Intercept Estimate, Intercept SE, Intercept p, Slope Estimate, Slope p). Notably, that means the rows I care about here are the ones where term is labeled "Intercept" or "age", not the ones for the covariates. 
+```{r}
+(m_results <- m_results %>% 
+   filter(term %in% c("Intercept", "age")))
+```
+
+Now how to get the columns how I want? Well, before I can make it wide, I ned to make it long. 
+```{r}
+(m_results <- m_results %>%
+   gather(key = tmp, value = value, estimate, std.error, p.value))
+```
+
+Now I need to join together the term and tmp columns in order to use `spread()` to make it wide format.  
+```{r}
+(m_results <- m_results %>%
+   unite(tmp, term, tmp, sep = "."))
+```
+
+Now, we're ready to use `spread()`.  
+```{r}
+(m_results <- m_results %>%
+   spread(key = tmp, value = value))
+```
+
+We're pretty much done! We need to make this render nicely in Rmarkdown, but that's a lesson for another week. For now, just use the code below to make a simple, markdown friendly table using the `kable()` function in the `knitr` pacakge. Run the line `?kable` and take some time to look through its documentation. 
+```{r}
+library(knitr)
+?kable
+kable(m_results)
+```
+
+## Creating Figures  
+For simple analyses like these, we generally wouldn't use a graph to visualize the results, but since ours are age differences across the lifespan, we're going to go ahead and do so (plus it's good practice).  
+
+There are packages for doing this, but they drive me mad. Plus, it's really not that hard to do! For ease, let's use our simple models without covariates (just predicting personality from age).  
+
+What we need to get the values to plot are the model predicted average values for each age. To do this, we'll use the `predict()` function I introduced last week. When we used it last, we wanted to get predicted values for each person using the data we used to fit the data. But this time, we want to use "idealized", average values. For this simple model, that's just age. So we just need to create a data frame with the range of ages. Use whatever range you want below. 
+
+```{r}
+# try using the tibble command to create a data frame with one variable, age
+# that ranges from whatever minimum to maximum you choose, call it pred_dat
+pred_dat <- tibble(age = seq(10,80,1))
+```
+
+Now, take the `pred_dat` data frame and feed it to the `predict()` function for each of the models. 
+```{r}
+# get the model predictions below 
+# pred_E <- predict(fitE1, newdata = pred_dat)
+pred_E <- pred_dat %>% mutate(pred = predict(fitE1, newdata = .))
+pred_A <- pred_dat %>% mutate(pred = predict(fitA1, newdata = .))
+pred_C <- pred_dat %>% mutate(pred = predict(fitC1, newdata = .))
+pred_N <- pred_dat %>% mutate(pred = predict(fitN1, newdata = .))
+pred_O <- pred_dat %>% mutate(pred = predict(fitO1, newdata = .))
+```
+
+Okay, we're ready to plot. Use the `ggplot2` code chunk below to plot the results for each model. Replace the data frame fed into the chunk as well as the part that says "[Trait]".  
+```{r}
+ggplot(pred_E, aes(x = age, y = pred)) +
+  geom_line() + 
+  labs(x = "Age", y = "Predicted [Trait] Rating") +
+  theme_classic()
+```
+
+Five resulting graphs isn't very efficient. The good news is we can use the joining skills from above to make one graph. 
+
+Look at the resulting data frame (e.g. `pred\_E`). We need to join these data frames together like we did the tidy data frames for the table section. Do that below. 
+```{r}
+# use full_join() to join all the predicted value data frames together. Don't 
+# forget you'll need to add a column that indexes which trait the predicted 
+# belong to! Call the object pred_dat 
+pred_dat <- pred_E %>% mutate(trait = "E") %>%
+  full_join(pred_A %>% mutate(trait = "A")) %>%
+  full_join(pred_C %>% mutate(trait = "C")) %>%
+  full_join(pred_N %>% mutate(trait = "N")) %>%
+  full_join(pred_O %>% mutate(trait = "O"))
+```
+
+Okay, we should be ready to plot. I'm just going to give you this code again. 
+```{r}
+ggplot(pred_dat, aes(x = age, y = pred, color = trait)) + 
+  geom_line() +
+  labs(x = "Age", y = "Predicted Personality Ratings") +
+  theme_classic()
+```
+
+We could also put these in facets: 
+```{r}
+ggplot(pred_dat, aes(x = age, y = pred, color = trait)) + 
+  geom_line() +
+  labs(x = "Age", y = "Predicted Personality Ratings") +
+  facet_wrap(~trait) +
+  theme_classic() +
+  theme(legend.position = "none")
+```
+
+## Practice Results Section 
+Coming soon...
+
+
+
+
+
+
+

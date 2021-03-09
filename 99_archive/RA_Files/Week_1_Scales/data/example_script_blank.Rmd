@@ -1,0 +1,250 @@
+---
+title: "Psychometrics"
+author: "Emorie D Beck"
+output: html_notebook
+date: "`r Sys.setlocale('LC_TIME', 'C'); format(Sys.time(), '%d\\\\. %B %Y')`"
+output:
+  html_document:
+    theme: united
+    highlight: tango
+    df_print: paged
+    code_folding: show
+    toc: true
+    toc_float: true
+    toc_depth: 2
+editor_options: 
+  chunk_output_type: inline
+---
+
+# What is Personality? (And how do we measure it?)  
+This week, we are starting with the most basic question: what is personality. To answer this question, we will start with a psychometric approach as this is the dominant perspective in the field at present. 
+
+My favorite definition of personality is that "personality is what personality tests test," which means that what we measure in personality tests defines what we think of personality as. Much of the field of personality focuses on how personality can be measured using inventories of items that describe what you generally do. In this exercise, we will address the ways that personality scientists and psychometricians typically create these inventories. The concepts we will test are defined below.  
+
+## Statistics: Reliability  
+Inter-item correlations  
+Item-total correlations  
+Split-half correlations  
+Spearman Brown Prophecy Formula  
+Cronbach's Alpha  
+
+[ppt slides](https://github.com/emoriebeck/R-tutorials/raw/master/RA_Files/Week_1_Scales/Reliability%20and%20Validity%20Presentation.pptx)  
+
+## R Skills  
+[blank script](https://github.com/emoriebeck/R-tutorials/raw/master/RA_Files/Week_1_Scales/data/example_script_blank.Rmd)  
+[Completed script](https://github.com/emoriebeck/R-tutorials/raw/master/RA_Files/Week_1_Scales/data/example_script.Rmd)  
+
+## Readings  
+Furr, Scale Development, Ch. 1-2
+
+# Workspace
+## Packages
+```{r}
+library(psych)
+library(plyr)
+library(tidyverse)
+```
+
+## Data  
+First, we need to load in these data. We're going to use 3 data sets of different size to demonstrate some of these concepts. The items come from the International Personality Item Pool (IPIP) and are subset of responses from the [SAPA Project](https://sapa-project.org/).  
+
+### IPIP20
+```{r}
+wd <- "https://github.com/emoriebeck/R-tutorials/raw/master/RA_Files/Week_1_Scales"
+# load data
+ipip20 <- read_csv(sprintf("%s/data/ipip20.csv", wd))
+```
+
+### IPIP50  
+```{r}
+# load data
+ipip50 <- read_csv(sprintf("%s/data/ipip50.csv", wd))
+```
+
+### IPIP100
+```{r}
+# load data
+ipip100 <- read_csv(sprintf("%s/data/ipip100.csv", wd))
+```
+
+# Inter-Item Correlations  
+The idea of inter-item correlations involves 2 concepts, coherence and differentiation. Items in the same scale should be related to one another and not related to items in other scales. To test this, we will use the `cor()` function  in R to calculate the correlation matrix of items in a scale.
+
+Below, I've added code to do pull out the itmes from the Agreeableness scale then to use that to calculate the correlations among those items. Run the code below and look at the results. Then do so for Extraversion, Conscientiousness, EmotionalStability, and Intellect.  
+
+## IPIP20
+```{r}
+a <- ipip20 %>% select(contains("Agreeableness"))
+
+(r_a <- cor(a, use = "pairwise"))
+```
+
+## Reverse Coding  
+Did you notice anything odd? If you remember from your reading, psychometricians often use items that capture the opposite of the construct under investigation to control for social desirability (sort of).  
+
+The code below will load in the keys (positive or negative) for each of the data sets (data frames called `ipip20_items`, `ipip50_items`, and `ipip100_items`). I demonstrate reverse coding for the ipip20 data set. Your challenge is to also do so for the ipip50 and ipip100.  
+
+```{r}
+load("~/Dropbox (Brown)/Summer 2018/RA Files/Week 1 Scales/data/keys.RData")
+
+keys20 <- ipip20_items$rev_code
+
+ipip20[5:24] <- reverse.code(ipip20[5:24], keys = keys20)
+```
+
+Now that we've reverse coded the items, we can recalculate the correlations. They should make more sense now.  
+
+## Back to IPIP20  
+Do the same we did above for the remaining Big 5 traits for the IPIP20. Then do so for the IPIP50 and IPIP100.  
+
+```{r}
+a20 <- ipip20 %>% select(contains("Agreeableness"))
+
+(r_a20 <- cor(a20, use = "pairwise"))
+```
+
+## IPIP50
+```{r}
+# add code here
+```
+
+## IPIP100
+```{r}
+# add code here
+```
+
+
+## Average Inter-Item Correlations  
+Now that we've looked at individual item level correlations, the next step is to look at them on average, with the idea that items within a scale should have similar relationships to one another and be high on average.  
+
+Below, you see code to first remove the lower triangle of the correlation matrix and the diagonal to remove redundancy in the correlation matrix of Agreeableness (since correlation matrices are symmetric). Then you see code to take that matrix and calculate its mean.  
+
+### IPIP20
+```{r}
+# turn lower part of the matrix to NA
+r_a20[lower.tri(r_a20, diag = T)] <- NA
+
+# average correlation 
+mean(r_a20, na.rm = T)
+```
+
+### IPIP50  
+```{r}
+# add code here
+```
+
+### IPIP100  
+```{r}
+# add code here
+```
+
+# Item-Total Correlations  
+Item-total correlations are what they sound like -- the correlation between a single item and a composite (mean) of all other items. Here, for simplicity, we're going to be a little lazy and correlate each item with a composite that includes itself. Because this artificially inflates the correlation, I'll later show you a way to get an estiamte that doesn't include this item.  
+
+## Manual Method  
+
+### IPIP20  
+```{r}
+# add the rest of the big 5 for the ipip20
+(a20_itr <- cor(a20, rowMeans(a20, na.rm = T), use = "pairwise"))
+```
+
+### IPIP50  
+```{r}
+# add code here
+```
+
+### IPIP100  
+```{r}
+# add code here
+```
+
+## `psych` package  
+The `psych` package will give us a method for calculating item-total correlations that do not aritificially inflate the correlations. Below, you see the code for doing so using the `alpha()` function from the `psych` package. 
+
+Run the code below for Agreeablness, then repeat for the rest of the Big 5. Once you've done that, do the same for the ipip50 and ipip100.  
+
+### IPIP20  
+```{r}
+(a20_alpha <- psych::alpha(a20))
+
+a20_alpha$item.stats
+```
+
+### IPIP50  
+```{r}
+# add code here
+```
+
+### IPIP100  
+```{r}
+# add code here
+```
+
+What do you notice about the correlations?
+
+# Split-Half Reliability  
+Split-half methods are basically a way of testing whether items belong in a scale by looking at whether composites of arbitrary halves of the scale tend to be related to one another. If they are, then this suggests the items are likely to be very related to one another in general.  
+
+Below, you see code for correlating the first and second halves of the Agreeableness scale in the IPIP20. Do the same for the rest of the Big 5 then for the IPIP50 and IPIP100.  
+
+## Manual Method  
+### IPIP20  
+```{r}
+cor(rowMeans(a20[,1:2]), rowMeans(a20[,3:4]))
+```
+
+### IPIP50  
+```{r}
+# add code here (hint: there are a total of 10 items in each scale)
+```
+
+### IPIP100   
+```{r}
+# add code here (hint: there are a total of 20 items in each scale)
+```
+
+Can you think of any reasons why splitting a scale into first and second halves of the scale could be an issue? Can you think of a solution?  
+
+## `psych` package  
+The `psych` pacakge has another helpful function, called `splithalf()` that doesn't just choose one arbitrary split of the scale. Instead, it tests all possible splits and gives you the average estimate, which is a more robust estimate.
+
+Below, you see the code for calculating the split-half correlation between items in the Agreeableness scale. Do the same for the rest of the Big 5, then the same for the IPIP50 and IPIP100.  
+
+### IPIP20  
+```{r}
+splitHalf(a20)
+```
+
+### IPIP50  
+```{r}
+# add code here
+```
+
+### IPIP100  
+```{r}
+# add code here
+```
+
+# Cronbach's alpha  
+Finally, the most popular test of internal consistency of a scale is Cronbach's alpha. Basically, what this does is is extend the Spearman Brown prophecy formula, which relies on the split-half correlation to capture all possible split halves.  
+
+The alpha function already calculates this for us, so below, you see code to access that from the results of that function call. Access this for the rest of the Big 5 for the IPIP20, then for the IPIP50 and IPIP100.  
+
+## IPIP20  
+```{r}
+a20_alpha$total
+```
+
+## IPIP50  
+```{r}
+# add code here
+```
+
+## IPIP100
+```{r}
+# add code here
+```
+
+# Conclusion  
+This has been a quick and dirty introduction to psychometrics and how you test these in R. The goal of this has been to get you thinking about personality is and give you a quick introduction to running things in RStudio. In future weeks, we will extend these skills. 

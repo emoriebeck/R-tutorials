@@ -1,0 +1,422 @@
+---
+title: "Logistic Regression"
+author: 
+  - "Emorie D Beck"
+date: "`r Sys.setlocale('LC_TIME', 'C'); format(Sys.time(), '%d\\\\. %B %Y')`"
+output:
+  html_document:
+    theme: united
+    highlight: tango
+    df_print: paged
+    code_folding: show
+    toc: true
+    toc_float: true
+    toc_depth: 2
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Workspace 
+
+## Packages
+```{r}
+library(psych)
+library(broom)
+library(plyr)
+library(tidyverse)
+```
+
+## Data  
+This week, our data are going to (continue to) come from the German Socioeconomic Panel Study (GSOEP). The GSOEP is a longitudinal study of adults in German housesholds. The study has a broad range of variables, but for our purposes we're just going to use personality ratings, life events, age, and gender from 2005 to 2015.  
+
+We need to extend our codebook. To create it, go to https://data.soep.de/soep-core# and use the search feature to find the variables you need or https://data.soep.de/soep-long/topics/ where you can scroll through topics (this may be easier for finding the personality variables). Use your codebook from last week, and add the additional variables.   
+
+Each year has several different files. Thankfully, for our purposes, we just need one file for each year. The first part of that file name indexes which wave it is. Waves are labeled a (1985) to bf (2015). Once the waves hit z, they start over at "ba". The second piece of the filename indexes which type of file it is. We need the "p" files, which stand for person. So, for instance, 2005 is "vp.sav".  
+
+There are different ways to load it in, but I would recommend using some form of loop, which should do the following:  
+1. read in the file for a specific year (e.g. using `haven::read_sav()`). 
+2. pull the variables from the codebook from that year (e.g. using `select()`).
+    - NOTE: you should pull certain variables, like the person and household IDs for every year.  
+3. rename those variables in wide format.  
+4. add a column to the data for that year that indexes what year the observation is.  
+5. merge the data from that year with previous years.  
+
+For help with this, see https://emoriebeck.github.io/R-tutorials/purrr/. I'll give you a `purrr` solution later in the week.    
+
+Once you've got the codebook, we should be ready to go. 
+
+```{r}
+wd <- "https://github.com/emoriebeck/R-tutorials/blob/master/RA_Files/Week_5_Logistic_Regression"
+# load your codebook 
+
+```
+
+```{r}
+# get the old and new names of the repeating variables. 
+all.old.cols <- (codebook %>% filter(class == "proc" & Year == 0))$Item
+all.new.cols <- (codebook %>% filter(class == "proc" & Year == 0))$new_name
+
+# create short function to read in separate files for each wave
+read_fun <- function(file, year){
+  
+}
+
+# you need letters, not numbers to index different data files. 
+# but years will be more useful to index your codebook, so we'll 
+# put both in our starting data frame. I've filled out this part. 
+# Now you just need to figure out how use that to load the files 
+# and get the correct variables (one's that repeat year to year)
+dat <- tibble(
+  Year = as.character(seq(2005, 2015,1)),
+  file = c(letters[22:26], paste("b", letters[1:6], sep = ""))) %>%
+  mutate(data = map2(file, Year, read_fun)) %>%
+  unnest(data)
+```
+
+## Descriptives  
+Because our data are now longitudinal, we need to split our descriptives by year. Try doing this using the `describeBy()` in the `psych` package.  
+```{r}
+# run the descriptives and check variable ranges
+describeBy(dat, dat$Year)
+```
+
+## Check Missings 
+How are missings coded in this data set? Do we need to make any changes to how they are coded?  
+```{r}
+# You should have noted some variables that needed "scrubbed" (changed to missing)
+# change those to NA using your preferred method
+
+```
+
+## Recode Variables  
+```{r}
+# You should have your keys. Reverse code the items that need reverse coded. 
+
+# I'm going to give you this chunk because apparently some people don't know what year they were born
+dat <- dat %>% 
+  group_by(PROC_SID) %>% 
+  mutate(
+    Dem_DOB = max(Dem_DOB, na.rm = T),
+    Dem_DOB = ifelse(is.infinite(Dem_DOB) == T, NA, Dem_DOB),
+    Dem_Sex = max(Dem_Sex, na.rm = T),
+    Dem_Sex = ifelse(is.infinite(Dem_Sex) == T, NA, Dem_Sex)
+  )
+```
+
+## Create New Variables  
+For these data, we need to create an age variable. There isn't one in the data set.v
+```{r}
+# create an age variable by subtracting the date of birth from 2005 
+# change gender to a factor 
+
+
+# create a composite "parent died" variable 
+# there are a few ways to do this. 
+# One method uses the max() function
+# Another sums up the mom and dad died variables 
+# then recodes them so that 1 means >= 1 parent died
+# and 0 means 0 parents died
+
+```
+
+## Create composites
+For these data, we don't have a lot of items, so we  just want to create composites for the Big 5. Use the methods we learned before to do so.  
+
+### Personality  
+```{r}
+# create a new data frame called pers_dat
+```
+
+### Life Events
+We want to code if someone experienced a life event anywhere within the study period. Experiment with different ways of doing this. Note that we want to figure out if a participant EVER responded with a 1 to any of our life event variables. 
+```{r}
+# hints: 
+# type ?any into the console
+# try using the sum function or max function like you did to see
+# if at least one parent had died 
+# I'd recommend moving your data from wide to long and using the 
+# group_by() and summarize() functions to make these variables
+# then once you've done that, you can use spread() to move them 
+# back to wide format (see the skeleton below). Call it le_dat
+
+# le_dat <- dat %>% select() %>%
+#   gather() %>%
+#   group_by() %>%
+#   summarize() %>%
+#   ungroup() %>%
+#   spread()
+```
+
+### Merge the files  
+```{r}
+dat_final <- pers_dat %>% full_join(le_dat)
+```
+
+# Logistic Regression  
+## Simple Logistic Regression  
+Thus far, when we've run regressions, our outcome variables have been continuous variables. And while it's true that there are a lot more things in life that exist on continuums than on binaries, there are things that are truly categorical. Logisitic regression is a special form of linear regression that has been adapted to deal with these cases.  
+
+Because of this, we do not need some of the assumptions we needed with "regular" linear regression: 
+We do NOT some assumptions we needed before.  
+1. We do NOT need a linear relationship between the dependent variable and the independent variables.  
+2. We do NOT need need normally distributed errors.  
+3. We do NOT need homogeneity of errors.  
+
+To show why this matters, let's plot a normal distribution, which is the distribution we assume our outcome comes from in linear regression, versus a binomial distribution, which is what we have when we have discrete outcomes. 
+
+```{r}
+x <- rnorm(1000)
+y_norm <- x*3/2 + 3 + rnorm(1000, 0, 1)
+y_binom <- ifelse(y_norm <= 2, 0, 1)
+
+par(mfrow = c(1,2))
+hist(y_norm)
+hist(y_binom)
+```
+
+We've got a problem. I said before that we don't need a linear relationship between our outcome and predictors, but a regression doesn't become a logistic regression just by using a discrete outcome. We have to do something to the regression to make that true. To see what I mean, look what happens when I plot the data:
+
+```{r}
+tibble(model = "binomial", x = x, y = y_binom) %>%
+  full_join(tibble(model = "normal", x = x, y = y_norm)) %>%
+  ggplot(aes(x = x, y = y)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = F) +
+  geom_smooth(method = "loess", se = F, color = "red") +
+  facet_wrap(~model, scales = "free") +
+  theme_classic()
+```
+
+In both cases, if we look at the blue line, x and y seem to be associated -- higher values on X are associated with higher values on Y. But there's a problem with just using a linear regression here -- the red line shows that the relationship between X and Y in the binomial case aren't linear.  
+
+There's a name for the relationship we typically see between a predictor and binomial outcome. It's basically the S-shaped red curve we see above. When the relationship is linear, like the figure on the right above, the red and blue lines almost completely overlap, so there's no reason we can't just use a plain old linear model. 
+
+With a continuous oucome, our simple regression model was: 
+
+$$Y_{ij} = b_0 + b_1x_i$$  
+
+But for logistic regression we aren't trying to predict some value of Y -- those can only be two values. Instead we are trying to predict the probability of the outcomes, given a value of X, which leaves us with: 
+
+$$E(Y_i|x_i) = p_i = b_0 + b_1x_i$$
+
+The issue with this is now we can have values that fall outside of 0 and 1 (the blue line). To overcome the problem with negative values we could exponeniate:
+
+$$p_i = exp(b_0 + b_1x_i)$$  
+
+But now we have values that fall between 0 and infinity, which is still a problem, so we need to upward bound as well. In order to do this, we can divide by 1 + the exponential
+
+$$p_i = \frac{exp(b_0 + b_1x_i)}{1 + exp(b_0 + b_1x_i)}$$  
+
+By doing some algebra, we can solve this to: 
+
+$$log \Big(\frac{p_i}{1-p_i}\Big) = logit(p_i) = b_0 + b_1x_i$$  
+
+$log \Big(\frac{p_i}{1-p_i}\Big)$ is called a logistic unit (logit), or log-odds. You might represent the fraction $\frac{p_i}{1-p_i}$ from probability theory. This is simply the odds of something happening. By looking at the equation, it should be clear that it's the ratio of the probability of an event to the probabilty of not the event. So if an event is more probable, the ratio will be greater than 1. If it is less probable, the ratio will be less than 1. The log simply bounds it.
+
+The logit is what we'd call a non-linear transformation. Non-linear data to linear are quite common. Depending on the type of non-linearity, there are different transformations that can make the data linear. For binomial data, we use a logit transformation.
+
+The benefits of this is that it bounds the odds within possible ranges. The downside to this is that we are left trying to interpret our coefficients in log odds, which most of us realistically can't do. But you may remember from high school math, that you can canel out a natural log by expoentiating it. We can do that with our coefficients as well to bring them back to "regular" odds, which we can interpret.  
+
+Let's practice all of this below. 
+
+```{r}
+# I'm going to help you get your data frame set up here
+# start by moving the persoanlity data from wide to long
+(dat.long <- dat_final %>%
+  gather(key = Trait, value = p_value, BF_A:BF_O) %>%
+  # now we'll make the events long, too
+  gather(key = Event, value = le_value, LE_ChldBrth:LE_SepPart))
+
+# nest the data by Trait and Event
+
+# now we need to write a simple function that runs the model
+# see last week's solutions for an idea 
+# should be in teh form of glm(le_value ~ p_value)
+mod_fun <- function(data){
+  
+}
+
+# run the modeling function
+(dat.nested <- dat.nested %>%
+  mutate(mod = map(data, mod_fun)))
+```
+
+Now, we've run our models, and we ran a lot of them. Now, I'm going to show you some tricks for efficiently summarizing them.  
+
+```{r}
+# start by getting the tidy summaries we used previously from broom::tidy
+(dat.nested <- dat.nested %>%
+  mutate(tidy = map(mod, broom::tidy)))
+
+# now we'll "unnest" the tidy summaries
+(res.long <- dat.nested %>% unnest(tidy, .drop = T))
+```
+
+The problem here is that our coefficients are in log odds, which doesn't help us much. We can exponentiate them to make them into odds: 
+
+```{r}
+# expoentiation
+(res.long <- res.long %>% 
+  mutate_at(vars(estimate, std.error), funs(exp)))
+
+# now let's get rid of the test statistic
+(res.long <- res.long %>% select(-statistic))
+```
+
+Now we're going to do some serious rearranging. Our goal is to end up a table that looks something like this:           | Agreeablness          | Extraversion        | ...
+Event     | OR |  SE   | p        | OR |  (SE)     | p  | ...
+
+Intercepts in these models are not really interpretable, so we'll start by filtering those out: 
+```{r}
+# start by filtering out the rows where term == "(Intercept)"
+(res.long <- res.long %>% filter(term == "p_value"))
+
+# now we can get rid of the term column because there is no unique info in it
+(res.long <- res.long %>% select(-term))
+
+# now move the estimate, std.error, and p.value columns from wide to long
+(res.long <- res.long %>% gather(key = est, value = value, estimate:p.value))
+
+# now to get it into the final form, we need to spread some of the columns 
+# from long to wide. Specifically, we want a separate column for estimate, 
+# standard error, and the p value for each of the Big 5 
+# we'll use the `unite()` fucntion from dplyr to do so
+
+(res.long <- res.long %>% unite(tmp, Trait, est, sep = "."))
+
+# now we're set to change to wide format 
+(res.wide <- res.long %>% spread(key = tmp, value = value))
+```
+
+Now that we have a table, let's practice interpreting the coefficients: 
+
+(Ignore the intercepts. They are simply the average log-odds when personality is zero, which isn't meaningful here anyway.)  
+
+Remember: 
+**Odds < 1**: a one unit increase in a predictor variable (here personality) is associated with an |OR - 1| *decrease* in odds of the outcome (here a life event).  
+**Odds = 1**: different levels of the predictor are not associated with different odds of the outcome. 
+**Odds > 1**: a one unit increase in a predictor variable (here personality) is associated with an |OR - 1| *increase* in odds of the outcome (here a life event).  
+
+Choose a couple of coefficients from above and practice interpreting the coefficients. 
+
+## Multiple Logistic Regression  
+Because logistic regression is simply an extension of linear regression using transformations, the extension from "simple" logistic regression to multiple logistic regression using covariates and moderators is actually quite simple. When we add additional covariates, we are "controlling" for them, and when we add moderators, we are testing whether one of the predictors influences the probability of the outcome at different levels of another predictor.  
+
+Below, let's practice that by using gender as a moderator. 
+```{r}
+# start by writing a new mod_fun that includes the moderator
+# the moderator is already in the data and called "gender"
+mod_fun <- function(data){
+  
+}
+
+# run the modeling function
+# you can just call mutate and create a new variable 
+# call it mod.mod (moderator model) and use map to run the model 
+# hint: you can basically copy this code from above once you rewrite
+# the mod_fun function 
+
+```
+
+
+Now, let's get the summaries
+```{r}
+# get the tidy data frame
+# call it mod.tidy
+
+# now we'll "unnest" the tidy summaries
+
+```
+
+We need to exponentiate the coefficients again to get them "back" to odds: 
+
+```{r}
+# expoentiation
+
+# now let's get rid of the test statistic
+
+```
+
+Now let's create a table, but this time, let's make a table with just the interaction coefficients ("p_value:genderFemale"). Take the code from above to do this. I'd recommend not doing everything as separate steps but combining it all into one longer command: 
+
+
+```{r}
+# start by filtering out the rows where term != "p_value:genderFemale"
+
+# now we can get rid of the term column because there is no unique info in it
+
+# now move the estimate, std.error, and p.value columns from wide to long
+
+# now to get it into the final form, we need to spread some of the columns 
+# from long to wide. Specifically, we want a separate column for estimate, 
+# standard error, and the p value for each of the Big 5 
+# we'll use the `unite()` fucntion from dplyr to do so
+
+# now we're set to change to wide format 
+
+```
+
+With moderation, it's typically a good idea to plot the results, so that you can interpret them. We'll do this exactly as we did last week when we learned about moderation, except that we will have one extra step where we have to exponentiate the predicted values.
+
+```{r}
+# write a prediction function
+pred_fun <- function(fit){
+  crossing(
+    p_value = seq(1,7,.01),
+    gender = c("Female", "Male")
+  ) %>% 
+    mutate(pred = predict(fit, newdata = .),
+           pred = exp(pred))
+}
+
+# run the pred fun using mutate() and map()
+(dat.nested <- dat.nested %>%
+  mutate(pred = map(mod.mod, pred_fun)))
+
+# plot the results
+# first, you'll have to use unnest(pred) to unnest the predicted results
+# I'd recommend then using filter() to keep only one life event
+dat.nested %>%
+  unnest(pred) %>%
+  filter(Event == "LE_ChldBrth") %>%
+  ggplot(aes(x = p_value, y = pred, color = gender)) +
+  geom_line() + 
+  facet_wrap(~Trait) + 
+  theme_classic()
+```
+
+Pretty cool, huh?
+
+## Odds and Probability
+One last thing: it's actually quite easy to transform odds to probability and vice versa. 
+
+Recall above where part of the step to get from $p_i$ to $logit(p_i)$ was this: 
+
+$$p_i = \frac{exp(b_0 + b_1x_i)}{1 + exp(b_0 + b_1x_i)}$$  
+
+And that our final equation was this:  
+
+$$log \Big(\frac{p_i}{1-p_i}\Big) = logit(p_i) = b_0 + b_1x_i$$  
+
+Turns out, this is actually how we move from probability to odds. In the first equation, we are setting ourselves us to work in odds, while in the second, we are setting ourselves up to work with probability:
+
+$$OR = \frac{p_i}{1-p_i}$$  
+
+$$p_i = \frac{OR}{1+OR}$$  
+
+We can use this to look at our results for in terms of probability. Typically, this is most common for plotting as the results themselves are typically reported in odds ratios (although this varies by discipline.)
+
+Let's look at the plot we made above in terms of probability. This just means one addition line of code where convert the odds to probability:
+
+```{r}
+# modify the code above but convert odds to probability before plotting 
+
+```
+
+# Multinomial Regression  
+
+If you make it this far and want materials on multinomial regression, I'm happy to provide -- just email me.  

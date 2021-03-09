@@ -1,0 +1,773 @@
+---
+title: "APA Tables"
+author: "Emorie D Beck"
+date: "April 23, 2020"
+output:
+  html_document:
+    theme: united
+    highlight: tango
+    df_print: paged
+    code_folding: show
+    toc: true
+    toc_float: true
+---
+
+```{r, echo = F}
+knitr::opts_chunk$set(echo = TRUE, message = F, warning = F, error = F,
+                     class.source = "code-style")
+```
+
+# Workspace  
+## Packages  
+```{r}
+library(knitr)
+library(lme4)
+library(kableExtra)
+library(psych)
+library(broom)
+library(plyr)
+library(tidyverse)
+```
+
+```{r, eval = F, echo=FALSE}
+wd <- "~/Dropbox (Brown)/projects/selection"
+load("/Users/emoriebeck/Dropbox (Brown)/projects/selection/data/clean/gsoep_cleaned.RData")
+ref <- sprintf("%s/data/gsoep/cirdef.sav", wd) %>% haven::read_sav(.) %>% 
+  select(hhnr, rgroup20) %>%
+  full_join(sprintf("%s/data/gsoep/ppfad.sav", wd) %>% haven::read_sav(.) %>%
+  select(persnr, hhnr)) %>%
+  select(SID = persnr, rgroup20)
+outcomes <- c("chldbrth", "divorced", "married", "mvInPrtnr")
+gsoep_out <- gsoep_out %>%  full_join(ref) %>% filter(rgroup20 > 10) %>% select(-rgroup20) %>%
+  filter(name %in% outcomes) 
+gsoep_SCA <- gsoep_SCA %>%  full_join(ref) %>% filter(rgroup20 > 10) %>% select(-rgroup20) 
+gsoep_pers <- gsoep_pers %>%  full_join(ref) %>% filter(rgroup20 > 10) %>% select(-rgroup20) %>%
+  filter(name %in% c("NA", "PA", "SE", "DEP", "OP")) %>%
+  mutate(name = mapvalues(name, "NA", "NegAff"))
+
+gsoep <- gsoep_out %>% select(SID, p_year, Outcome = name, o_value = value) %>%
+  filter(!is.na(p_year) & !is.na(Outcome)) %>%
+  filter(Outcome %in% outcomes) %>%
+  group_by(p_year) %>%
+  nest() %>%
+  ungroup() %>%
+  mutate(data = map2(data, p_year, ~(.x) %>% full_join(gsoep_pers %>% filter(year == .y) %>% select(SID, p_year = year, Trait = name, p_value = value)) %>% filter(!is.na(p_value) & !is.na(o_value))),
+         data = map2(data, p_year,  ~(.x) %>% left_join(gsoep_SCA %>% filter(p_year == .y)))) 
+
+gsoep <- gsoep %>% mutate(data = map(data, ~(.) %>% select(-p_year))) %>% unnest(data) %>% select(-alcohol) 
+rm(list = ls()[grepl("gsoep_", ls())])
+gsoep <- gsoep %>% filter(!is.na(SID) & !is.na(Outcome) & !is.na(Trait)) %>%
+  write.csv(., file = "~/Desktop/tables/data/gsoep.csv", row.names = F)
+```
+
+## Data  
+The data we're going to use are from the teaching sample from the German Socioeconomic Panel Study. These data have been pre-cleaned (see earlier workshop on workflow and creating guidelines for tips).
+
+The data we'll use fall into three categories:  
+1. **Personality trait composites:** Negative Affect, Positive Affect, Self-Esteem, CESD Depression, and Optimism. These were cleaned, reversed coded, and composited prior to being included in this final data set.  
+2. **Outcomes:** Moving in with a partner, marriage, divorce, and child birth. These were cleaned, coded as 1 (occurred) or 0 (did not occur) according to whether an outcome occurred for each individual or not *after* each possible measured personality year. Moreover, people who experienced these outcomes prior to the target personality year are excluded.  
+3. **Covariates:** Age, gender (0 = male, 1 = female, education (0 = high school or below, 1 = college, 2 = higher than college), gross wages, self-rated health, smoking (0 = never smoked 1 = ever smoked), exercise, BMI, religion, parental education, and parental occupational prestige (ISEI). Each of these were composited for all available data up to the measured personality years.   
+
+First, the code below will download a .zip file when you run it. Once, you do, navigate to your Desktop to unzip the folder. You should now be able to run the rest of the code.  
+
+```{r get data}
+data_source <- "https://github.com/emoriebeck/R-tutorials/raw/master/wustl_r_workshops/tables.zip"
+data_dest <- "~/Desktop/tables.zip"
+download.file(data_source, data_dest)
+```
+
+```{r}
+wd <- "~/Desktop/tables"
+
+(gsoep <- sprintf("%s/data/gsoep.csv", wd) %>% read_csv())
+```
+
+
+# APA Tables  
+In psychology, we must work within the confines of APA style. Although these guidelines have been updated, the style guide remains quite similar to earlier guidelines with respect to tables.  
+
+But psychology research is heterogeneous and expectations for modern tables require combining multiple models in creative ways.  
+
+Small tweaks to data or model arguments can spell disaster for creating a table. It's easy to make mistakes in copying values or matching different models to their respective rows and columns.
+
+Thankfully, the increasing popularity of R has been coupled with more methods for creating a reproducible workflow that includes tables.  
+
+# Outline  
+In this tutorial, we will directly cover 3 different use cases, while a few others will be included in supplementary materials.  
+
+Personally, I favor non-automated tools, so we will cover the following packages:  
+- `kable` + `kableExtra` (<a href="http://haozhu233.github.io/kableExtra/awesome_table_in_html.html">html</a> and <a href="https://haozhu233.github.io/kableExtra/awesome_table_in_pdf.pdf">LaTeX</a>)  
+- <a href ="https://github.com/crsh/papaja">`papaja`</a>  
+
+Using these packages will build on earlier tutorials using `tidyr`, `dplyr`, workflow, and `purrr` and round out our discuss on data presentation using `ggplot2`.  
+
+For less flexible but more accessible tables see:  
+- <a href="https://cran.r-project.org/web/packages/apaTables/vignettes/apaTables.html">`apaTable`</a>  
+- <a href="http://www.strengejacke.de/sjPlot/">`sjPlot`</a>  
+- <a href="https://cran.r-project.org/web/packages/corrplot/vignettes/corrplot-intro.html">`corrplot`</a>  
+
+## Important Tools  
+Although it doesn't cover all models, the `broom` and `broom.mixed` family of packages will provide easy to work with estimates of nearly all types of models and will also provide the model terms that are ideal for most APA tables, including estimates, standard errors, and confidence intervals.  
+
+`lavaan` models are slightly more complicated, but it's actually relatively easy to deal with them (and how to extract their terms), assuming that you understand the models you are running.  
+
+# Basic Lessons: One DV/Outcome, Multiple Model Terms  
+We'll start with a basic case, predicting who has a child from personality, both with and without control variables. 
+
+Becauce outcome variables are binary, we'll use logistic regression.  
+
+The basic form of the model is: $\log\Big(\frac{p_i}{1-p_i}\Big) = b_0 + b_1X_1 + b_2X_2 ... b_pXp$
+
+In other words, we're predicting the log odds of having a child from a linear combination of predictor variables.  
+
+## Set up the data frame
+First, we'll use some of what we learned in the `purrr` workshop to set ourselves up to be able to create these tables easily, using `group_by()` and `nest()` to create nested data frames for our target personality + outcome combinations. To do this, we'll also use what you learned about `filter()` and `mutate()`.  
+
+```{r}
+gsoep_nested1 <- gsoep %>%
+  filter(Outcome == "chldbrth") %>%
+  group_by(Trait, Outcome) %>%
+  nest() %>%
+  ungroup()
+gsoep_nested1
+```
+
+First, let's pause and see what we have. We now have a data frame with 3 columns (Outcome, Trait, and data) and 4 rows. The data column is of class list, meaning it's a "list column" that contains a `tibble` in each cell. This means that we can use `purrr` functions to run operations on each of these data frames individually but without having to copy and paste the same operation multiple times for each model we want to run.  
+
+## Run Models  
+To run the models, I like to write short functions that are easier to read than including a local function within a call to `purrr::map()`. Here, we're just going to write a simple function to predict child birth from personality.  
+```{r}
+mod1_fun <- function(d){
+  d$o_value <- factor(d$o_value)
+  glm(o_value ~ p_value, data = d, family = binomial(link = "logit"))
+}
+
+gsoep_nested1 <- gsoep_nested1 %>%
+  mutate(m = map(data, mod1_fun))
+gsoep_nested1
+```
+
+Now, when we look at the nested frame, we see an additional column, which is also a list, but this column contains `<glm>` objects rather than `tibbles`.  
+
+## Get Key Terms  
+Now that we have the models, we want to get our key terms. I'm a big fan of using the function `tidy` from the `broom` package to do this. Bonus because it plays nicely with `purrr`. Double bonus because it will give us confidence intervals, which I generally prefer over p-values and standard erorrs because I find them more informative.  
+
+```{r}
+gsoep_nested1 <- gsoep_nested1 %>%
+  mutate(tidy = map(m, ~tidy(., conf.int = T)))
+gsoep_nested1
+```
+
+Note that what I've used here is a local function, meaning that I've used the notation `~`function(., arguments). The tilda tells `R` we want a local function, and the `.` tells R to use the mapped `m` column as the function input.  
+
+Now we have a fifth column, which is a list column called `tidy` that contains a `tibble`, just like the `data` column.  
+
+## Creating a Table  
+Now we are finally ready to create a table! I'm going to use `kable` + `kableExtra` to do this in steps.  
+
+First, we'll unnest the `tidy` column from our data frame. Before doing so, we will drop the `data` and `m` columns because they've done their work for now.  
+```{r}
+tidy1 <- gsoep_nested1 %>%
+  select(-data, -m) %>%
+  unnest(tidy)
+tidy1
+```
+
+As you can see, we now have lots of information about our model terms, which are already nicely indexed by Outcome and Trait combinations. 
+
+But before we're ready to create a table, we have to make a few considerations: 
+- What is our target term? In this case "p_value" which is the change in log odds associated with a 1 unit increase/decrease in p_value.  
+
+```{r}
+tidy1 <- tidy1 %>% filter(term == "p_value")
+tidy1
+```
+
+- How will we denote significance? In this case, we'll use confidence intervals whose signs match. We'll then bold these terms for our table. 
+
+```{r}
+tidy1 <- tidy1 %>% mutate(sig = ifelse(sign(conf.low) == sign(conf.high), "sig", "ns"))
+tidy1
+```
+
+- What is the desired final structure for the table? I'd like columns for Trait, estimate (b), and confidence intervals (CI) formatted to two decimal places and bolded if significant. I'd also like a span header denoting that the outcome measure is child birth.  
+
+Before we do this, though, we need to convert our log odds to odds ratios, using the `exp()` function.  
+
+```{r}
+tidy1 <- tidy1 %>%
+  mutate_at(vars(estimate, conf.low, conf.high), exp) 
+tidy1
+```
+
+Now, we can format them.  
+```{r}
+tidy1 <- tidy1 %>%
+  mutate_at(vars(estimate, conf.low, conf.high), ~sprintf("%.2f", .)) 
+tidy1
+```
+
+`sprintf()` is my favorite base `R` formatting function. "%.2f" means I'm asking it to take a floating point number and include 2 digits after the "." and 0 before. We can now see that the `estimate`, `conf.low`, and `conf.high` columns are of class `<chr>` instead of `<dbl>`. 
+
+But now we need to create our confidence intervals.  
+
+```{r}
+tidy1 <- tidy1 %>%
+  mutate(CI = sprintf("[%s, %s]", conf.low, conf.high))
+tidy1
+```
+
+And bold the significant confidence intervals and estimates.  
+
+```{r}
+tidy1 <- tidy1 %>%
+  mutate_at(vars(estimate, CI), ~ifelse(sig == "sig", sprintf("<strong>%s</strong>", .), .))
+tidy1
+```
+
+This reads as "for both the estimate and the CI columns, if the sig column is equal to "sig", then let's format it as bold using html. Otherwise, let's leave it alone." And indeed, we can see that the final result formats 3/4 rows.
+
+Thankfully, these can be achieved without considerable reshaping of the data, which is why we've started here, so we're almost done. We just need to get rid of some unnecessary columnns.  
+```{r}
+tidy1 <- tidy1 %>%
+  select(Trait, OR = estimate, CI)
+```
+
+Because we just have one target term and one outcome, we don't need those columns, so we're just keeping Trait, OR, which I renamed as such within in the select call, and CI. 
+
+Now let's `kable`.  You've likely used the `kable()` function from the `knitr` before. It's a very useful and simple function in most occasions.  
+
+```{r}
+kable(tidy1)
+```
+
+It will automatically generate the html code needed to create a table. But if we look closely at the code, it gives us some gobbledigook where we inputted html, so we need a way around that. I'm also going to throw in `kable_styling(full_width = F)` from the `kableExtra` package to help out here. It's not doing much, but it will make the formatted table print in your Viewer.  
+
+```{r}
+kable(tidy1, escape = F) %>%
+  kable_styling(full_width = F)
+```
+
+Much better. But this still doesn't look like an APA table, so let's keep going. 
+
+1. APA tables usually write out long names for our predictors, so let's change those first. I'm going to create a reference tibble and use `mapvalues()` from the `plyr` function for this.  
+```{r}
+p_names <- tibble(
+  old = c("NegAff", "PA", "SE", "OP", "DEP"),
+  new = c("Negative Affect", "Positive Affect", "Self-Esteem", "Optimism", "Depression")
+)
+
+tidy1 %>%
+  mutate(Trait = mapvalues(Trait, from = p_names$old, to = p_names$new),
+         Trait = factor(Trait, levels = p_names$new)) %>%
+  arrange(Trait) %>%
+  kable(., escape = F) %>%
+  kable_styling(full_width = F)
+```
+
+The combinatin of factor plus arrange here is super helpful for ordering your table.  
+
+2. The alignment of the columns isn't quite right. Let's fix that. We'll change the trait to right justified and b and CI to centered.  
+```{r}
+tidy1 %>%
+  mutate(Trait = mapvalues(Trait, from = p_names$old, to = p_names$new),
+         Trait = factor(Trait, levels = p_names$new)) %>%
+  arrange(Trait) %>%
+  kable(., escape = F,
+        align = c("r", "c", "c")) %>%
+  kable_styling(full_width = F)
+```
+
+3. But we're still missing our span header. There's a great function in the `kableExtra` package for this `add_header_above`. This function takes a named vector as argument, where the elements of the vector refer to the number of columns the named element should span.  
+
+```{r}
+tidy1 %>%
+  mutate(Trait = mapvalues(Trait, from = p_names$old, to = p_names$new),
+         Trait = factor(Trait, levels = p_names$new)) %>%
+  arrange(Trait) %>%
+  kable(., escape = F,
+        align = c("r", "c", "c")) %>%
+  kable_styling(full_width = F) %>%
+  add_header_above(c(" " = 1, "Birth of a Child" = 2))
+```
+
+Note that what the `" " = 1` does is skip the Trait column. This is very useful because it let's us not have a span header over every column.  
+
+4. APA style requires we note how we denote significance and have a title, so let's add a title and a note.  
+```{r}
+tidy1 %>%
+  mutate(Trait = mapvalues(Trait, from = p_names$old, to = p_names$new),
+         Trait = factor(Trait, levels = p_names$new)) %>%
+  arrange(Trait) %>%
+  kable(., escape = F,
+        align = c("r", "c", "c"),
+        caption = "<strong>Table 1</strong><br><em>Estimated Personality-Outcome Associations</em>") %>%
+  kable_styling(full_width = F) %>%
+  add_header_above(c(" " = 1, "Birth of a Child" = 2)) %>%
+  add_footnote(label = "Bold values indicate terms whose confidence intervals did not overlap with 0", notation = "none")
+```
+
+We did it!  
+
+# A Quick Note: HTML v. LaTeX  
+When creating tables, I prefer using HTML when I need the resulting tables to be in HTML and LaTeX when I can place the tables in a PDF. The syntax using `kable` and `kableExtra` is the same with the following exceptions: 
+
+1. The `format` argument in `kable()` would need to be set as `format = "latex"`.  
+2. The chunk option for a table to render would need to be set as `{r, results = 'asis'}`.  
+3. Bolding would need to be done as `\\textbf{}`, rather than the `html` `<strong></strong>` tag.  
+4. When using `collapse_rows()`, which we'll get to later, you'd want to set the `latex_hline` argument to `latex_hline = "none"`.  
+
+# Intermediate Lessons: Multiple DVs/Outcomes, Multiple Model Terms  
+
+Often, our models are not quite so simple. So what happens when we mix multiple outcomes/DVs and multiple predictors / IVs? Thankfully, not much is different!
+
+Below, we'll go through the steps. I'll skip over explaining ones that were explained in detail in the first example and focus on the new pieces.  
+
+## Set Up Data  
+```{r}
+gsoep_nested2 <- gsoep %>%
+  group_by(Trait, Outcome) %>%
+  nest() %>%
+  ungroup()
+gsoep_nested2
+```
+
+## Run the models  
+```{r}
+mod1_fun <- function(d){
+  d$o_value <- factor(d$o_value)
+  glm(o_value ~ p_value, data = d, family = binomial(link = "logit"))
+}
+
+gsoep_nested2 <- gsoep_nested2 %>%
+  mutate(m = map(data, mod1_fun),
+         tidy = map(m, ~tidy(., conf.int = T)))
+gsoep_nested2
+```
+
+## Create the Table  
+```{r}
+tidy2 <- gsoep_nested2 %>%
+  select(Outcome, Trait, tidy) %>%
+  unnest(tidy)
+tidy2
+```
+
+The basic steps from here are similar: filter target terms, index significance, exponentiate, format values, create CI's, bold significance, select needed columns.  
+```{r}
+tidy2 <- tidy2 %>%
+  filter(term == "p_value") %>%
+  mutate(sig = ifelse(sign(conf.low) == sign(conf.high), "sig", "ns")) %>%
+  mutate_at(vars(estimate, conf.low, conf.high), exp) %>%
+  mutate_at(vars(estimate, conf.low, conf.high), ~sprintf("%.2f", .)) %>%
+  mutate(CI = sprintf("[%s, %s]", conf.low, conf.high)) %>%
+  mutate_at(vars(estimate, CI), ~ifelse(sig == "sig", sprintf("<strong>%s</strong>", .), .)) %>%
+  select(Outcome, Trait, OR = estimate, CI)
+tidy2
+```
+
+Great, we're all set right? Not quite. If we want to do a span header, we need our data in shape for that. But  right now, our outcomes are rows, not columns. To get them as columns, we will need to: (1) `pivot_longer()` the OR's and CI's, (2) `unite()` the outcomes and type of estimate, (3) `pivot_wider()` these united terms, (4) reorder these columns as we want.  
+
+Let's do each in turn:  
+(1) Long format  
+```{r}
+tidy2 <- tidy2 %>%
+  pivot_longer(cols = c(OR, CI), names_to = "est", values_to = "value")
+tidy2
+```
+
+(2) Unite!  
+```{r}
+tidy2 <- tidy2 %>%
+  unite(tmp, Outcome, est, sep = "_")
+tidy2
+```
+
+(3) Pivot wider  
+```{r}
+tidy2 <- tidy2 %>%
+  pivot_wider(names_from = "tmp", values_from = "value")
+```
+
+(4) Create the order of columns
+```{r}
+O_names <- tibble(
+  old = c("mvInPrtnr", "married", "divorced", "chldbrth"),
+  new = c("Move in with Partner", "Married", "Divorced", "Birth of a Child")
+)
+
+levs <- paste(rep(O_names$old, each = 2), rep(c("OR","CI"), times = 4), sep = "_")
+tidy2 <- tidy2 %>%
+  select(Trait, all_of(levs))
+```
+
+Now we're ready to `kable()`! This will proceed almost exactly as before. The only difference from the previous example is that we have multiple different columns we want to span. Thankfully, we know what these are because we carefully ordered them when we factored them.  
+
+For our named vector, we'll take advantage of our `O_names` object to create the vector in advance:
+
+```{r}
+heads <- c(1, rep(2, 4))
+heads
+
+names(heads) <- c(" ", O_names$new)
+heads
+```
+
+```{r}
+tidy2 %>%
+  mutate(Trait = mapvalues(Trait, from = p_names$old, to = p_names$new),
+         Trait = factor(Trait, levels = p_names$new)) %>%
+  arrange(Trait) %>%
+  kable(., escape = F,
+        align = c("r", rep("c", 8)),
+        caption = "<strong>Table 2</strong><br><em>Estimated Personality-Outcome Associations</em>") %>%
+  kable_styling(full_width = F) %>%
+  add_header_above(heads) %>%
+  add_footnote(label = "Bold values indicate terms whose confidence intervals did not overlap with 0", notation = "none")
+```
+
+Ew, but those column names are terrible. Let's fix them using the `col.names` argument in `kable()`:  
+
+```{r}
+tidy2 %>%
+  mutate(Trait = mapvalues(Trait, from = p_names$old, to = p_names$new),
+         Trait = factor(Trait, levels = p_names$new)) %>%
+  arrange(Trait) %>%
+  kable(., escape = F,
+        align = c("r", rep("c", 8)),
+        col.names = c("Trait", rep(c("OR", "CI"), times = 4)),
+        caption = "<strong>Table 2</strong><br><em>Estimated Personality-Outcome Associations</em>") %>%
+  kable_styling(full_width = F) %>%
+  add_header_above(heads) %>%
+  add_footnote(label = "Bold values indicate terms whose confidence intervals did not overlap with 0", notation = "none")
+```
+
+# Advanced Lessons: Multiple DVs/Outcomes, Multiple Model Terms, Additional Formatting  
+
+Often, we want to do things like model comparison tests in which we add additional covariates and test if they significantly improve the model or see if they change the direction and magnitude of key terms. Generally, the resulting terms would then be placed in a table. 
+
+Below, I'll cover two cases -- covariates and moderators. For the case of moderators, I'll follow up with simple effects (although these may be added at a later date). 
+
+Specifically, we'll test this for age, gender, parental education, and self-rated health.  
+
+To be able to do this, we'll need to set our data up just a little bit differently. First, this is because we need to center values for testing moderators for variables that aren't factors or don't have natural 0 points. Second, the covariates / moderators are currently in wide format, so we'll need to make them long for our purposes.  
+
+Let's do that first. 
+
+```{r}
+gsoep_long <- gsoep %>%
+  select(SID, Outcome, o_value, Trait, p_value, age, gender, parEdu, SRhealth) %>%
+  mutate_at(vars(age, SRhealth), ~as.numeric(scale(., center = T, scale = F))) %>%
+  pivot_longer(
+    cols = c(age, gender, parEdu, SRhealth), 
+    values_to = "c_value", names_to = "Covariate"
+    )
+```
+
+We'll need to worry about changing gender and parental education into factor variables later. I'm going to show you my favorite trick.  
+
+## Covariates  
+### Set up Data  
+This time, we need to add a new grouping variable -- namely, the target covariates.  
+
+Only trick is we also need the combination with no covariate. There's lots of ways to add this on. I'll show you one way.  
+
+```{r}
+gsoep_nested3 <- gsoep_long %>%
+  full_join(gsoep %>% select(SID, Outcome, o_value, Trait, p_value) %>%
+              mutate(Covariate = "none")) %>% 
+  group_by(Trait, Outcome, Covariate) %>%
+  nest() %>%
+  ungroup() %>%
+  arrange(Outcome, Trait, Covariate)
+gsoep_nested3
+```
+
+### Run the models  
+```{r}
+factor_fun <- function(x){if(is.numeric(x)){diff(range(x, na.rm = T)) %in% 1:2 & length(unique(x)) <= 4} else{F}}
+
+mod3_fun <- function(d, cov){
+  d$o_value <- factor(d$o_value)
+  d <- d %>% mutate_if(factor_fun, factor)
+  if(cov == "none"){f <- formula(o_value ~ p_value)} else{f <- formula(o_value ~ p_value + c_value)}
+  glm(f, data = d, family = binomial(link = "logit"))
+}
+
+gsoep_nested3 <- gsoep_nested3 %>%
+  mutate(m = map2(data, Covariate, mod3_fun),
+         tidy = map(m, ~tidy(., conf.int = T)))
+gsoep_nested3
+```
+
+Looking specifically at the `tidy` column, notice that there are different numbers of rows. This is good! We should see 3 rows for age, gender, and SRhealth because we have one new term -- a continuous covariate of two level binary covariate. We should see 4 rows for parEdu because we have two new terms -- for a three level categorical covariate. Finally, when there is no covariate, we should just have 2 rows like in the previous example. 
+
+### Create the Table  
+```{r}
+tidy3 <- gsoep_nested3 %>%
+  select(Outcome, Trait, Covariate, tidy) %>%
+  unnest(tidy)
+tidy3
+```
+
+The basic steps from here are similar: filter target terms, index significance, exponentiate, format values, create CI's, bold significance, select needed columns.  
+
+
+```{r}
+tidy3 <- tidy3 %>%
+  filter(term == "p_value") %>%
+  mutate(sig = ifelse(sign(conf.low) == sign(conf.high), "sig", "ns")) %>%
+  mutate_at(vars(estimate, conf.low, conf.high), exp) %>%
+  mutate_at(vars(estimate, conf.low, conf.high), ~sprintf("%.2f", .)) %>%
+  mutate(CI = sprintf("[%s, %s]", conf.low, conf.high)) %>%
+  mutate_at(vars(estimate, CI), ~ifelse(sig == "sig", sprintf("<strong>%s</strong>", .), .)) %>%
+  select(Outcome, Trait, Covariate, OR = estimate, CI)
+```
+
+Now we're ready for the `pivot_longer()`, `unite()`, `pivot_wider()`, order columns (using `select()`) combo from before. The only difference is that I'm going to use `pivot_wider()` to do the uniting for me this time!  
+
+```{r}
+O_names <- tibble(
+  old = c("mvInPrtnr", "married", "divorced", "chldbrth"),
+  new = c("Move in with Partner", "Married", "Divorced", "Birth of a Child")
+)
+levs <- paste(rep(O_names$old, each = 2), rep(c("OR","CI"), times = 4), sep = "_")
+
+tidy3 <- tidy3 %>%
+  pivot_longer(cols = c(OR, CI), names_to = "est", values_to = "value") %>%
+  pivot_wider(names_from = c("Outcome", "est"), values_from = "value", names_sep = "_") %>%
+  select(Trait, Covariate, all_of(levs))
+tidy3
+```
+
+All right, time to use `kable()`! This will proceed almost exactly as before. The only difference from the previous example is that we have multiple different models with different combinations of p_value terms depending on what we controlled for. So we'll introduce a new function `collapse_rows()` from `kableExtra`.  
+
+Given that we have multiple covariates, we'll also want to order them. So we'll make the Covariate column a factor as well. But we'll do so after we've given our covariates nicer names.  While we're at it, we'll go ahead and do the same things for our Trait column.  
+
+```{r}
+c_names <- tibble(
+  old = c("none", "age", "SRhealth", "gender", "parEdu"),
+  new = c("None", "Age", "Self-Rated Health", "Gender", "Parental Education")
+)
+
+tidy3 <- tidy3 %>%
+  mutate(Trait = mapvalues(Trait, from = p_names$old, to = p_names$new),
+         Trait = factor(Trait, levels = p_names$new),
+         Covariate = mapvalues(Covariate, from = c_names$old, to = c_names$new),
+         Covariate = factor(Covariate, levels = c_names$new)) %>%
+  arrange(Trait, Covariate)
+tidy3
+```
+
+And again, for our spanned columns, we'll take advantage of our `O_names` object to create the vector in advance:
+
+```{r}
+heads <- rep(2, 5)
+heads
+
+names(heads) <- c(" ", O_names$new)
+heads
+```
+
+Now, this will proceed as before, with just a few small tweaks to the `align` and `col.names` arguments to account for the additional Covariate column.
+
+```{r}
+tidy3 %>%
+  kable(., escape = F,
+        align = c("r", "r", rep("c", 8)),
+        col.names = c("Trait", "Covariate", rep(c("OR", "CI"), times = 4)),
+        caption = "<strong>Table 3</strong><br><em>Estimated Personality-Outcome Associations</em>") %>%
+  kable_styling(full_width = F) %>%
+  add_header_above(heads) %>%
+  add_footnote(label = "Bold values indicate terms whose confidence intervals did not overlap with 0", notation = "none")
+```
+
+So this looks pretty good, except that it's annoying how the Trait name is repeated five times. This is where we'll use `collapse_rows()`.  
+
+```{r}
+tidy3 %>%
+  kable(., escape = F,
+        align = c("r", "r", rep("c", 8)),
+        col.names = c("Trait", "Covariate", rep(c("OR", "CI"), times = 4)),
+        caption = "<strong>Table 3</strong><br><em>Estimated Personality-Outcome Associations</em>") %>%
+  kable_styling(full_width = F) %>%
+  collapse_rows(1, valign = "top") %>%
+  add_header_above(heads) %>%
+  add_footnote(label = "Bold values indicate terms whose confidence intervals did not overlap with 0", notation = "none")
+```
+
+That's a pretty good-looking table!  
+
+## Moderators  
+All right, time to introduce a moderator!  
+
+The procedure for this is going to be very close to above, with the main change being that the key term will no longer be p_value but p_value:moderator. 
+
+But first, the set up  
+### Set up Data  
+This time, we need to add a new grouping variable -- namely, the target moderators. We aren't going to include the "none" condition here, as we assume we've already tested and presented those results separately.    
+
+```{r}
+gsoep_nested4 <- gsoep_long %>%
+  group_by(Trait, Outcome, Covariate) %>%
+  nest() %>%
+  ungroup() %>%
+  arrange(Outcome, Trait, Covariate)
+gsoep_nested4
+```
+
+### Run the models  
+```{r}
+factor_fun <- function(x){if(is.numeric(x)){diff(range(x, na.rm = T)) %in% 1:2 & length(unique(x)) <= 4} else{F}}
+
+mod4_fun <- function(d, cov){
+  d$o_value <- factor(d$o_value)
+  d <- d %>% mutate_if(factor_fun, factor)
+  if(cov == "none"){f <- formula(o_value ~ p_value)} else{f <- formula(o_value ~ p_value* c_value)}
+  glm(f, data = d, family = binomial(link = "logit"))
+}
+
+gsoep_nested4 <- gsoep_nested4 %>%
+  mutate(m = map2(data, Covariate, mod4_fun),
+         tidy = map(m, ~tidy(., conf.int = T)))
+gsoep_nested4
+```
+
+Like before, we are going to have different numbers of rows. Again this is good becuase it means that the appropriate moderators and main effects were added.  
+
+### Create the Table  
+```{r}
+tidy4 <- gsoep_nested4 %>%
+  select(Outcome, Trait, Moderator = Covariate, tidy) %>%
+  unnest(tidy)
+tidy4
+```
+
+The basic steps from here are similar: filter target terms, index significance, exponentiate, format values, create CI's, bold significance, select needed columns.  
+
+We do need to a bit of work on how we index our moderators. Specifically, for the factor variables, we want to make sure we indicate what the levels are. 
+
+```{r}
+tidy4 <- tidy4 %>%
+  filter(grepl("p_value:", term)) %>%
+  mutate(term = str_replace(term, "c_value", Moderator),
+         Moderator = str_remove(term, "p_value:"),
+         sig = ifelse(sign(conf.low) == sign(conf.high), "sig", "ns")) %>%
+  mutate_at(vars(estimate, conf.low, conf.high), exp) %>%
+  mutate_at(vars(estimate, conf.low, conf.high), ~sprintf("%.2f", .)) %>%
+  mutate(CI = sprintf("[%s, %s]", conf.low, conf.high)) %>%
+  mutate_at(vars(estimate, CI), ~ifelse(sig == "sig", sprintf("<strong>%s</strong>", .), .)) %>%
+  select(Outcome, Trait, Moderator, OR = estimate, CI)
+```
+
+Now we're ready for the `pivot_longer()`, `unite()`, `pivot_wider()`, order columns (using `select()`) combo from before. The only difference is that I'm going to use `pivot_wider()` to do the uniting for me this time!  
+
+```{r}
+O_names <- tibble(
+  old = c("mvInPrtnr", "married", "divorced", "chldbrth"),
+  new = c("Move in with Partner", "Married", "Divorced", "Birth of a Child")
+)
+levs <- paste(rep(O_names$old, each = 2), rep(c("OR","CI"), times = 4), sep = "_")
+
+tidy4 <- tidy4 %>%
+  pivot_longer(cols = c(OR, CI), names_to = "est", values_to = "value") %>%
+  pivot_wider(names_from = c("Outcome", "est"), values_from = "value", names_sep = "_") %>%
+  select(Trait, Moderator, all_of(levs))
+```
+
+All right, time to use `kable()`! This will proceed almost exactly as the example with covariates, with the main difference being that our target term is now the interaction.  
+
+Given that we have multiple moderators, some of which have multiple levels, we'll also want to order them. So we'll make the Moderator column a factor as well. But we'll do so after we've given our covariates nicer names.  While we're at it, we'll go ahead and do the same things for our Trait column.  
+
+```{r}
+m_names <- tibble(
+  old = c("age", "SRhealth", "gender1", "parEdu1", "parEdu2"),
+  new = c("Age", "Self-Rated Health", "Gender (Female)", 
+          "Parental Education (College)", "Parental Education (Beyond College)")
+)
+
+tidy4 <- tidy4 %>%
+  mutate(Trait = mapvalues(Trait, from = p_names$old, to = p_names$new),
+         Trait = factor(Trait, levels = p_names$new),
+         Moderator = mapvalues(Moderator, from = m_names$old, to = m_names$new),
+         Moderator = factor(Moderator, levels = m_names$new)) %>%
+  arrange(Trait, Moderator)
+```
+
+And again, for our spanned columns, we'll take advantage of our `O_names` object to create the vector in advance:
+
+```{r}
+heads <- rep(2, 5)
+heads
+
+names(heads) <- c(" ", O_names$new)
+heads
+```
+
+Now, this will proceed as before, including using `collapse_rows()`. The change this time will simply be to our table caption.  
+
+```{r}
+tidy4 %>%
+  kable(., escape = F,
+        align = c("r", "r", rep("c", 8)),
+        col.names = c("Trait", "Moderator", rep(c("OR", "CI"), times = 4)),
+        caption = "<strong>Table 4</strong><br><em>Estimated Moderators of Personality-Outcome Associations</em>") %>%
+  kable_styling(full_width = F) %>%
+  collapse_rows(1, valign = "top") %>%
+  add_header_above(heads) %>%
+  add_footnote(label = "Bold values indicate terms whose confidence intervals did not overlap with 0", notation = "none")
+```
+
+
+## Simple Effects  
+With moderator analyses, we typically need to unpack the results and present them as simple effects. In many cases, plots are super useful. I demonstrated how to make simple effects plots in the `purrr` tutorial, so check there for more!  
+
+We're going to start here with our same nested data frame from the previous example. We'll basically want to get estimates of the personality-outcome associations for different levels of our factor or continuous moderators.  
+
+To do this, we'll use the `predict()` functions. 
+
+** In progress **
+
+# Other Lessons  
+## Descriptives  
+Descriptives tables are slightly tricky to add generalizable code for becuase the needs of those tables vary. Below, I'm going to give some code for a couple of basic descriptive tables I'd be likely to include for a paper looking at predictive personality-outcome associations. 
+
+First, one indexing demographic characteristics and samples sizes. Second, one indexing means and standard deviations. Then finally wrapping up with a correlation table of study measures.  
+
+### Demographic Charateristics  
+First, let's look at demographic characteristics, including sample sizes, age, and gender.  
+
+Because I'm interested in events, I'm going to specifically look at sample sizes of those who did and did experience events as well as any gender or age differences.  
+
+```{r}
+gsoep %>%
+  select(p_year, SID, Outcome, o_value, gender, age) %>%
+  group_by(p_year, Outcome, o_value) %>%
+  summarize(N = n(), 
+            Female = sum(gender, na.rm = T), 
+            Age = mean(age, na.rm = T), 
+            SD_Age = sd(age, na.rm = T)) %>%
+  ungroup() %>%
+  pivot_longer(cols = N:SD_Age, names_to = "measure", values_to = "value") %>%
+  pivot_wider(names_from = c("measure", "o_value"), values_from = "value",
+              names_sep = "_") %>%
+  mutate(N = sprintf("%s (%s)", N_1, N_0),
+         `% Female` = sprintf("%.2f (%.2f)", Female_1/N_1*100, Female_0/N_0*100),
+         `Mean` = sprintf("%.1f (%.1f)", Age_1, Age_0),
+         `SD` = sprintf("%.1f (%.1f)", SD_Age_1, SD_Age_0),
+         Outcome = mapvalues(Outcome, O_names$old, O_names$new),
+         Outcome = factor(Outcome, levels = O_names$new)) %>%
+  select(Outcome, Year = p_year, N:`SD`) %>%
+  arrange(Outcome, Year) %>%
+  kable(., escape = F,
+        caption = "<strong>Table 7</strong><br><em>Descriptive Statistics of Those Who Experienced Outcomes versus Those Who Did Not",
+        align = c("r", "r", rep("c", 4))) %>%
+  kable_styling(full_width = F) %>%
+  add_header_above(c(" " = 4, "Age" = 2)) %>%
+  collapse_rows(1, "top") %>%
+  add_footnote(label = "Values in parentheses indicate demographics of those who did not experience outcomes after the noted year", notation = "none")
+```
+
+### Means and Standard Deviations  
+
+### Zero-Order Correlations  

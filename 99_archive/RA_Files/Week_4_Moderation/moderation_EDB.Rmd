@@ -1,0 +1,529 @@
+---
+title: "Multiple Regression with Interactions"
+author: 
+  - "Emorie D Beck"
+date: "`r Sys.setlocale('LC_TIME', 'C'); format(Sys.time(), '%d\\\\. %B %Y')`"
+output:
+  html_document:
+    theme: united
+    highlight: tango
+    df_print: paged
+    code_folding: show
+    toc: true
+    toc_float: true
+    toc_depth: 2
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Workspace 
+
+## Packages
+```{r}
+library(psych)
+library(broom)
+library(plyr)
+library(tidyverse)
+```
+
+## Data  
+This week, our data are going to come from the German Socioeconomic Panel Study (GSOEP). The GSOEP is a longitudinal study of adults in German housesholds. The study has a broad range of variables, but for our purposes we're just going to use personality ratings, age, life satisfaction, and gender from a single year (2005). In future weeks, we'll work to get additional variables across waves, which will be more involved, but this will get our feet wet with these data. 
+
+Like when we used the PAIRS data, we need a codebook. To create it, go to https://data.soep.de/soep-core# and use the search feature to find the variables you need or https://data.soep.de/soep-long/topics/ where you can scroll through topics (this may be easier for finding the personality variables). I've included a base codebook that should show you what you need to gather for each variable.  
+```{r}
+wd <- "https://github.com/emoriebeck/R-tutorials/blob/master/RA_Files/Week_4_Moderation"
+dat.2005 <- haven::read_sav(url(sprintf("%s/vp.sav?raw=true", wd)))
+```
+
+These data are organized differently than others we've worked with in the past. The data are actually split into multiple .sav files for each year (the "v" above means 2005). We're just going to work with 1 that will include the variables we need. 
+
+Once you've got the codebook, we should be ready to go. 
+
+```{r}
+# load your codebook 
+destfile <- "Codebook_EDB.xlsx"
+curl::curl_download(sprintf("%s/Codebook_EDB.xlsx?raw=true", wd), destfile)
+codebook <- readxl::read_excel(destfile)
+```
+
+
+To start, let's trim out data frame. 
+```{r}
+# create a vector of the old item names we need. 
+old_names <- tolower(codebook$Item)
+new_names <- codebook$new_name
+
+# use your preferred method to get rid of columns we don't need 
+# and rename them using our character vector of new names  
+dat.2005 <- dat.2005 %>% select(old_names) %>% setNames(new_names)
+```
+
+## Descriptives
+```{r}
+# run the descriptives and check variable ranges
+describe(dat.2005)
+```
+
+## Check Missings 
+How are missings coded in this data set? Do we need to make any changes to how they are coded?  
+```{r}
+# You should have noted some variables that needed "scrubbed" (changed to missing)
+# change those to NA using your preferred method
+dat.2005 <- dat.2005 %>% mutate_all(funs(mapvalues(., seq(-1,-7,-1), rep(NA,7), warn_missing = F)))
+```
+
+## Recode Variables  
+```{r}
+# You should have your keys. Reverse code the items that need reverse coded. 
+keys     <- codebook$rev_code[codebook$rev_code == -1]
+items    <- codebook$new_name[codebook$rev_code == -1]
+dat.2005[,items] <- reverse.code(keys, dat.2005[,items], mini = 1, maxi = 7)
+```
+
+## Create composites
+For these data, we have lots of items, so we don't just want to create composites for the Big 5, we also want to create composites for the facets of each of the Big 5. Use the methods we learned before to do so.  
+```{r}
+dat.2005 <- dat.2005 %>%
+  gather(key = item, value = value, BF_A1:BF_O3, na.rm = T) %>%
+  separate(item, c("trait", "item"), -1) %>%
+  group_by(trait, PROC_SID, PROC_household, Dem_DOB, Dem_Sex, Psych_LifeSat) %>%
+  summarize(value = mean(value, na.rm = T)) %>%
+  spread(key = trait, value = value) %>% 
+  ungroup()
+```
+
+## Create New Variables  
+For these data, we need to create an age variable. There isn't one in the data set.v
+```{r}
+# create an age variable by subtracting the date of birth from 2005 
+dat.2005 <- dat.2005 %>% 
+  mutate(age = 2005 - Dem_DOB,
+         gender = factor(Dem_Sex, levels = c(1,2), labels = c("Male", "Female")))
+```
+
+
+# Zero-Order Correlations
+Before we run a regression, we should always look at the zero-order correlations among the predictors and outcomes. For these data, we want to look at the relationship between age and personality, and gender, so correlate the age column with the composites for each of the Big 5 and their facets.  
+```{r}
+# run the correlations
+cor(select(dat.2005, Dem_Sex:age), use = "pairwise")
+```
+
+# Moderation  
+Last week, we looked at cross-sectional age differences in personality, controlling for background characteristics. This week, we're going to look at how those characteristics may *moderate* the relationship between age and personality. One way to think about this is that it means that personality varies as a function of both age and whatever moderator variable we are choosing. 
+
+This shouldn't be a foreign concept, as it's the same thing you learned when you learned ANOVA in your intro stats course. In fact, ANOVA *is* regression. And this week, I'll show you why.  
+
+But let's start with an equation. When we were doing simple regression before, our regression equation was simply:  
+$$Y_{ij} = b_0 + b_1X_1 + \epsilon_{ij}$$  
+where Y is the outcome variable (personality), X is the predictor variable (age) and $\epsilon_{ij}$ are the residuals of the regression line.  $b_0$ is the intercept (mean at X = 0) and $b_1$ is the scaled relationship between X and Y ($b_1 = r_{XY}\frac{s_y}{s_x}$).  
+
+Now, we can directly incorporate the error into the measurement by subbing $Y_{ij}$ for $\hat{Y}_{ij}$, which signals we are only interested in the predicted value. The error / uncertainty will still be reflected in the standard errors of the coefficients.  
+$$\hat{Y}_{ij} = b_0 + b_1X_1$$  
+
+When we switched to the multiple regression case, this equation became: 
+
+$$\hat{Y}_{ij} = b_0 + b_1X_1 + b_2X_2 + ... + b_pX_p$$  
+where p is the number of predictors in the model. 
+
+Now last time, I mentioned that we wouldn't get into the prediction question with multiple regression because it's more complicated. This is because we have to control for the covariates when making predictions. How we do that makes sense when we consider an alternative interpretation of any of the slope coefficients in multiple regression. "For someone with average levels of the covariates, a 1 unit increase in $X_i$ is associated with a $b_1$ increase in Y." Hopefully that makes it clear that what we have to do to find the predicted value $\hat{Y}$ at a given level on a predictor X, is to set all of the predictors/covariates to the average values.  
+
+```{r}
+## base R 
+# -----------------------------------------------------------------
+# Extraversion 
+fit.E1 <- lm(BF_A ~ age + Psych_LifeSat, data = dat.2005)
+summary(fit.E1)
+
+# run the models for the rest of the Big 5 and interpret 
+
+## purrr
+# -----------------------------------------------------------------
+# shift data to long form, group by trait, and nest the data frame
+(nested.mods <- dat.2005 %>%
+  gather(key = trait, value = value, BF_A:BF_O, na.rm = T) %>%
+  group_by(trait) %>%
+  nest())
+
+# write a function for the model
+model_fun <- function(data){
+  lm(value ~ age + Psych_LifeSat, data = data)
+}
+
+# run the models 
+(nested.mods <- nested.mods %>%
+  mutate(model = map(data, model_fun)))
+
+# run the summaries
+(nested.mods <- nested.mods %>%
+  mutate(summary = map(model, summary)))
+
+nested.mods$summary
+```
+
+
+Now, I'm going to introduce a useful new function to help us create the data frame we need to get the predicted values: `crossing()` from the `dplyr` package. Essentially, crossing is a function that "crosses" all the levels / values of the variables that you give it. It results in a data frame with rows that have all possible combinations of the columns. This is really great because otherwise you are stuck using `rep()` 8000 times.  
+
+```{r}
+## base R 
+# -----------------------------------------------------------------
+# create a frame of ranges of values 
+(pred.dat <- 
+  crossing(
+    age = seq(10, 80, 1),
+    Psych_LifeSat = mean(dat.2005$Psych_LifeSat, na.rm = T)
+  )) 
+
+# get the predicted values
+pred.E1 <- pred.dat %>% mutate(pred = predict(fit.E1, newdata = pred.dat))
+
+# plot the results
+pred.E1 %>%
+  ggplot(aes(x = age, y = pred)) + 
+  geom_line() +
+  labs(x = "Age", y = "Predicted Extraversion Rating") +
+  theme_classic()
+
+# do the same for the rest of the Big 5
+```
+
+```{r}
+## purrr
+# -----------------------------------------------------------------
+(pred.dat <- 
+  crossing(
+    age = seq(10, 80, 1),
+    Psych_LifeSat = mean(dat.2005$Psych_LifeSat, na.rm = T)
+  )) 
+
+# write prediction function 
+pred_fun <- function(model){
+  crossing(
+    age = seq(10, 80, 1),
+    Psych_LifeSat = mean(dat.2005$Psych_LifeSat, na.rm = T)
+  ) %>%
+    mutate(pred = predict(model, newdata = .))
+}
+
+# get the predicted values
+(nested.mods <- nested.mods %>%
+  mutate(pred = map(model, pred_fun)))
+
+# let's see what that gives us
+nested.mods %>% unnest(pred)
+
+# plot the results
+nested.mods %>% unnest(pred) %>%
+  ggplot(aes(x = age, y = pred, color = trait)) + 
+  geom_line() +
+  labs(x = "Age", y = "Predicted Extraversion Rating") +
+  theme_classic()
+```
+
+Moderation can be partially thought of as an extension of multiple regression, where we aren't just controlling for a variable as a covariate, we're saying that the relationship between the predictor X and the outcome Y varies at different levels of the covariate. Consider, for example, depression and positive events' relationship to global happiness ratings. If you think about it, you wouldn't expect positive events to affect the happiness of people with different levels of depression the same. There's a reason that one type of depression is called anhedonia -- positive events stop arousing positive emotions.  
+
+## Introduction to Coding  
+We're going to start with the simplest form of moderators: a two-level nominal variable. Gender is a good variable to use for this. For our personality example, we might ask if gender moderates age differences in personality. Stated differently, this tests whether the age differences in personality across the life span are different for men and women.  
+
+The equation for this is as follows: 
+
+$$\hat{Y}_{ij} = b_0 + b_1*age + b_2*BFI.A + b_3*(age*BFI.A)$$  
+Our new estimate ($b_3$) is our interaction. For the $b_1$ and $b_2$ coefficients, we get predicted estimates by feeding in literal values of age or Agreeableness. For an interaction, the values are going to be products between the two variables we are interacting. So in this case the values that would get multiplied by $b_3$ are each person's age multiplied by their Agreeableness score. 
+
+So the model frame would something like this: 
+```{r}
+dat.2005 %>% select(age, Dem_Sex) %>% mutate(Dem_Sex = Dem_Sex - 1, `age:gender` = age * Dem_Sex)
+```
+
+The good news is that we don't generally have to do this R. If we are using the `lm()` function in R, then it will do this for us in the background. We just have to communicate to `lm()` that we want to add an interaction. 
+
+In this case, we can tell R we want an interaction by specifying `lm(BFI.E ~ age + gender + age:gender, data = dat.2005)`. An equivalent form is `lm(BFI.E ~ age*gender, data = dat.2005)`, but be careful using that notation becuase it assumes you want main effects for all variables associated with the "*" and that may not always be the case.  
+
+But before we're ready to understand and interpret the model, we need to understand more how to interpet nominal variables. When we include a nominal variable in a model, we have to have a way of understanding how different levels of the variable influence the model. The procedure of modeling really isn't any different. We're still just feeding numbers to a solver that's using matrix algebra in the background. But what we have to understand is what those numbers are.
+
+### Dummy Coding  
+We'll start with the most common / simplest case, which is the one you will use almost always. Dummy coding is a coding system of 0's and 1's. In `R`, it's called "treatment" contrasts, which can be generated with the `contr.treatment()` function. For example, the dummy codes for a 2-level nominal variable (e.g. gender) would be as follows:  
+```{r}
+contr.treatment(n = 2)
+```
+
+What is this telling us? Well, it's telling us that the two levels our model have been translated into numbers. So in this case, when gender is male, the number that goes into the model is 0, while when gender is female, the number that goes into the model is 1. 
+
+When we're controlling for a nominal variable, this isn't a huge deal. We're not usually interested in interpreting those coefficients, just in partialling out their influence. But when we are testing for moderators, this is huge deal. Different types of codes can fundamentally change the interpretation of your coefficient. When we test for moderators, we need to give our moderator a meaningful 0-point, or we can't really interpret the coefficients. 
+
+## Categorical Moderators  
+### Run Models
+Anyway, we're now set to run the model. We'll return back to our dummy codes when we start to interpret our coefficients.  
+
+#### Base R  
+```{r}
+fit.E2 <- lm(BF_E ~ age + gender + age:gender, data = dat.2005)
+summary(fit.E2)
+
+# run the models for the rest of the Big 5
+
+```
+
+#### purrr  
+```{r}
+# write a new function for the interaction model
+model_fun <- function(data){
+  lm(value ~ age + gender + age:gender, data = data)
+}
+
+(nested.mods <- nested.mods %>%
+  mutate(cat.int.model = map(data, model_fun)))
+
+lapply(nested.mods$cat.int.model, summary)
+
+# run the model below and save it to an object.  
+```
+
+Does gender moderate the relationship between age and personality?  
+
+How would you interpret the age (main effect) coefficient?  
+
+To interpret our main effect of gender and interaction between age and gender, we need that meaningful 0 point. Why? Well, let's imagine plugging 0's and 1's into or model above:  
+$$\hat{Y}_{ij} = b_0 + b_1*age + b_2*gender + b_3*(age*gender)$$  
+Think about the four coefficients as a vector: [$b_0$, $b_1$, $b_2$, $b_3$]. Then imagine different cases, where we plug in different values for these. The intercept, $b_0$, isn't mutliplied by anything, so it always gets a 1, the others get the model terms they are multiplied by. So [1, age, gender, age*gender]. Gender is going to be 1 or 0 always, so when it's 0, $b_2$ and $b_3$ drop out. 
+
+What does this mean for interpretation? Well, think about it. If $b_2$ and $b_3$ drop out when gender = 0 (that is, for men), then the resulting terms are going to tell us how our predictors are related to our outcomes for men. In other words, the resulting equation for men is: 
+
+$$\hat{Y}_{ij} = b_0 + b_1*age$$
+
+You already know how to interpret these coefficents. $b_0$ is the intercept, and age is the "slope." 
+
+When gender is 1 (that is, for women), the resulting terms will tell us how out predictors are related to our outcome for women. But it's not quite that simple. Our resulting equation is going to be: 
+$$\hat{Y}_{ij} = b_0 + b_1*age + b_2 + b_3*(age)$$ 
+which we can rearrange to be :
+$$\hat{Y}_{ij} = (b_0 + b_2) + (b_1 + b_3)*age$$ 
+The first chunk $(b_0 + b_2)$ is the intercept for women, while the second chunk $(b_1 + b_3)$ is the slope for women. Now, remember our $b_0$ term was the intercept for men, and $b_1$ was the slope for men. What does that make the $b_2$ and $b_3$ coefficients? *The difference in intercepts and slopes between men and women*. 
+
+This is really important, both in terms of interpretation but also in terms of hypothesis testing. *The significance of the $b_2$ and $b_3$ coefficients are formal tests of whether men and women have different intercepts and slopes.*  
+
+So now that we know that,
+
+How would you interpret the gender (main effect) coefficient?  
+
+How would you interpret the interaction coefficient?  
+
+
+### Plotting  
+Plotting for moderation is slightly more complicated. When you learned ANOVA, you may remember learning about post-hoc tests. Those are certainly things we can still run within regression, but when we have continuous predictors (e.g. age) that doesn't make quite as much sense. Instead, we typically run what we call "simple slopes analysis." The basic idea is that to unpack an interaction, which implies that the relationship between one predictor and the outcome varies depending on another predictor, we can hold one of the predictors "constant" at different levels and look at the relationship between the other predictor and the outcome at those levels.  
+
+This is going to be related to what I just went through above on dummy coding, but I'm going to use slightly different language here just to make sure it hits home / challenge you to think about this in multiple ways.  
+
+We started with one nominal variable here because I think that will make this clearer. With an interaction with a nominal variable, we are basically fitting separate regression for men and women to look at the relationship between personality and age. This means that we can also plot these separate lines. With nominal vairbales, it's easy to hold a predictor "constant" -- you just set the predictor equal to the values associated with a nominal variable. Remember that with a nominal variable, we create dummy codes. 
+
+For gender, this would be one dummy coded variable, which means that X will be 0 when the participant is a male and 1 otherwise. 
+
+We can use this an our equation from earlier to estimate the separate equations. 
+
+**Overall**: $\hat{Y}_{ij} = b_0 + b_1*age + b_2*BFI.A + b_3*(age*BFI.A)$  
+**Males** (gender = 0): $\hat{Y}_{ij} = b_0 + b_1*age + b_2*0 + b_3*(age*0) = b_0 + b_1*age$  
+**Females** (gender = 1): $\hat{Y}_{ij} = b_0 + b_1*age + b_2*1 + b_3*(age*1) = (b_0 + b_2) + (b_1 + b_3)*age$  
+For females, I've grouped the coefficients because it helps us to interpret the coefficients. 
+
+The $b_2$ coefficient is the mean difference in personality at age = 0. Thus, the estimate for females is the estimate at age = 0 + the difference. The $b_3$ coefficient is the difference in age differences across the lifespan for women relative to men. Thus, the estimate for females is the slope for males ($b_1$) plus the difference in age differences ($b_3$). Notably, both are multiplied by age because they are "slope" estimates.  
+
+The good news is that this is relatively easy to do in R:  
+#### Base R  
+```{r}
+# make the model frame
+pred.dat <- crossing(
+    age = seq(10,80,1), 
+    gender = c("Male", "Female")
+  )
+
+# get the predicted values
+pred.E2 <- pred.dat %>% mutate(pred = predict(fit.E2, newdata = .))
+
+# plot the results
+pred.E2 %>%
+  ggplot(aes(x = age, y = pred, color = gender)) +
+  geom_line() +
+  theme_classic()
+
+# repeat for the rest of the Big 5
+```
+
+#### purrr  
+```{r}
+pred_fun <- function(model){
+  crossing(
+    age = seq(10,80,1), 
+    gender = c("Male", "Female")
+  ) %>%
+    mutate(pred = predict(model, newdata = .))
+}
+
+# let's get the predictions
+(nested.mods <- nested.mods %>%
+  mutate(cat.int.pred = map(cat.int.model, pred_fun)))
+
+# let's take a look
+nested.mods %>% unnest(cat.int.pred)
+
+# plot the results
+nested.mods %>% unnest(cat.int.pred) %>%
+  ggplot(aes(x = age, y = pred, color = gender)) +
+  geom_line() +
+  facet_wrap(~trait, nrow = 2) +
+  theme_classic()
+
+# remember the crossing function I introduced earlier? Well, it's baaaackk
+(out <- crossing(age = seq(10,80,1),
+         gender = c("Male", "Female")))
+
+# out %>% 
+#   mutate(pred = predict(fit.E, newdata = .)) %>%
+#   ggplot(aes(x = age, y = pred, color = gender)) +
+#   geom_line() +
+#   theme_classic()
+```
+
+## Centering Predictors  
+Continous moderators can be seen as a slightly more complicated version of the nominal moderator case. In this case, we don't have the nominal variable with as a natural variable on which to break down the model into simple slopes. Instead we have to use an alternative method.
+
+Thankfully, the method isn't extremely complicated. Remember how with dummy coding, one advantage was that the interpretation of the coefficients is easier when the moderator has a real 0 point. Oftentimes, our variables don't in psychology, so *we have to make them have meaningful 0's through a process called centering*. There are different types of centering. I'll briefly touch on 3. 
+
+1. **Grand mean centering**: Grand mean centering means taking one of our variables and subtracting each observation from the average across all observations. This makes the interpretation of the resulting variable *the difference from the grand mean.* So a positive value means that person is above average, while a negative value means that person is below average. The closer they are to 0, the closer they are to average. Note that this keeps the variable on the same scale as the original variable (that is, the variance is unaffected, but the mean becomes 0).
+
+2. **Person mean centering**: Person mean centering means taking one of our variables and subtracting each observation from average across all observations *for that person*. This, of course, requires that you have multiple observations for each person, so we'll return back to this when we work with longitudinal data. The interpretation of the resulting variable is *the deviation of an observation from a person's average.* So think about something like mood. A postiive value would mean you had a better mood than average, while a negative value would mean you had a worse mood than average. Note that this keeps the variable on the same scale as the original variable (that is, the variance is unaffected). However, this also changes the grand mean.
+
+3. **Another point**: Sometimes, grand mean centering or person mean centering doesn't make sense. For instance, let's say we're studying personality development in adolescence (~14-19). So 14 is the beginning our observation period, and 19 is the end. In that case, we can center at that value (i.e. $age_0 = age - 14$). This means that the intercept of the resulting model is the average value of the outcome when age = 14. This is great because realistically, we probably don't have data when age is really 0, so that would be a gross extrapolation.  
+
+## Continuous Moderators  
+
+But first, we'll start with an illustrative example. Consider the relationship between age, personality, and health. If you think about this for a second, you likely quickly realize that these variables are confounded because we've seen that personality and age are, of course, very related. As a result, we might expect personality to be differentially related to health at different ages. In other words, health depends on both personality and age. From a theoretical perspective, think about Neuroticism. When you're young, Neuroticism may be a good thing. Neurotic young people are probably the ones slathering themselves with sun screen, taking their vitamins, and eating well, particularly if they are also high in Conscientiousness. 
+
+Let's see what this model looks like. In this case, health will be our outcome, and age and personality will be our outcomes. 
+
+$$\hat{Y}_{ij} = b_0 + b_1*age + b_2*personality + b_3*(age*personality)$$
+
+The same principles as before apply -- the $b_3$ coefficient is a product variable that we would create as follows:  
+```{r}
+dat.2005 %>% select(age, Psych_LifeSat) %>% mutate(`age:Psych_LifeSat` = age * Psych_LifeSat)
+```
+
+However, we have a problem. Neither of our variables have a natural 0 point. Since we're testing whether life satisfaction influences the relationship between age and personality, that's our moderator. In other words, life satisfaction is the variable that needs a natural 0 point. We only have one observation from each person, so person mean centering doesn't make sense. We also don't have a variable that it makes sense to center the value at, so we're going to grand mean center. 
+
+```{r}
+dat.2005 <- dat.2005 %>% 
+  mutate(GMC_Psych_LifeSat  = Psych_LifeSat - mean(Psych_LifeSat, na.rm = T))
+```
+
+We're now set to run the model: 
+### Run Models
+#### Base R
+
+```{r}
+# run the model below and save it to an object. 
+# write a new function for the interaction model
+fit.E3 <- lm(BF_E ~ age + GMC_Psych_LifeSat + age:GMC_Psych_LifeSat, data = dat.2005)
+summary(fit.E3)
+
+# repeat for the rest of the Big 5 and interpret
+
+```
+
+#### purrr
+```{r}
+# run the model below and save it to an object. 
+# write a new function for the interaction model
+model_fun <- function(data){
+  lm(value ~ age + GMC_Psych_LifeSat + age:GMC_Psych_LifeSat, data = data)
+}
+
+(nested.mods <- nested.mods %>%
+  mutate(data = map(data, function(x) {x %>% 
+  mutate(GMC_Psych_LifeSat  = Psych_LifeSat - mean(Psych_LifeSat, na.rm = T))}),
+         con.int.model = map(data, model_fun),
+         summary = map(con.int.model, ~print(base::summary(.)))))
+```
+
+Does life satisfaction moderate the relationship between age and personality?  
+
+How would you interpret the age (main effect) coefficient?  
+
+How would you interpret the life satisfaction (main effect) coefficient (hint: refer back to grand mean cetnering)?  
+
+How would you interpret the interaction coefficient (hint: refer back to how we interpreted the nominal variable as well as grand mean centering)?  
+
+Now, we're ready to start thinking about how we would understand the breakdown of the interaction -- that is, the simple effects. Unlike the case of the nominal predictor, we don't have two levels of one of our predictors to use to break down the relationships (We can't look at the equations for males versus women). Instead, what we typically do is look at the relationship between one predictor and outcome at different levels of the other predictor. What levels do we choose? typically we choose -1 SD, the mean, and +1 SD. Remember from learning about distributions that this means we should be capturing more than 60% of responses, so it's a reasonable approximation. 
+
+For simplicity, let's say our variables are standardized, so that our three values of X are -1, 0, and 1.  
+
+**personality = -1:** $\hat{Y}_{ij} = b_0 + b_1*age + b_2*-1 + b_3(age*-1) = (b_0 - b_2) + (b_1 - b_3)*age$  
+The intercept at -1 would be $(b_0 - b_2)$, while the slope would be $(b_1 - b_3)$  
+
+**personality = 0:** $\hat{Y}_{ij} = b_0 + b_1*age = (b_0 - b_3) + (b_1 - b_3)*age$  
+The intercept at 0 would be $b_0$, while the slope would be $b_1$  
+
+**personality = 1:** $\hat{Y}_{ij} = b_0 + b_1*age + b_2*1 + b_3(age*1) = (b_0 + b_2) + (b_1 + b_3)*age$  
+The intercept at 1 would be $(b_0 + b_2)$, while the slope would be $(b_1 + b_3)$  
+
+### Plotting
+Hopefully, this will make more sense once we've plotted the interaction. 
+
+To do this, we'll use a very similar procedure as we used previously, but this time we need to calculate the mean and SD of the variable we want to treat as the moderator 
+
+#### Base R  
+```{r}
+# find the mean and SD of the moderator
+m.psy.ls  <- mean(dat.2005$GMC_Psych_LifeSat, na.rm = T)
+sd.psy.ls <-   sd(dat.2005$GMC_Psych_LifeSat, na.rm = T)
+
+# get the model frame
+pred.dat <- crossing(
+  age = seq(10,80,1),
+  GMC_Psych_LifeSat = c(m.psy.ls - sd.psy.ls, m.psy.ls, m.psy.ls + sd.psy.ls)
+)
+
+# get the predicted values
+pred.E3 <- pred.dat %>% mutate(pred = predict(fit.E3, newdata = .))
+
+# plot the results
+pred.E3 %>%
+  ggplot(aes(x = age, y = pred, color = factor(GMC_Psych_LifeSat))) +
+  geom_line() +
+  theme_classic()
+```
+
+#### purrr  
+```{r}
+m.psy.ls  <- mean(dat.2005$GMC_Psych_LifeSat, na.rm = T)
+sd.psy.ls <-   sd(dat.2005$GMC_Psych_LifeSat, na.rm = T)
+
+pred_fun <- function(model){
+  crossing(
+    age = seq(10,80,1),
+    GMC_Psych_LifeSat = c(m.psy.ls - sd.psy.ls, m.psy.ls, m.psy.ls + sd.psy.ls)
+  ) %>%
+    mutate(pred = predict(model, newdata = .))
+}
+
+# let's get the predictions
+(nested.mods <- nested.mods %>%
+  mutate(con.int.pred = map(con.int.model, pred_fun)))
+
+# let's take a look
+nested.mods %>% unnest(con.int.pred)
+
+# plot the results
+nested.mods %>% unnest(con.int.pred) %>%
+  mutate(LS = mapvalues(GMC_Psych_LifeSat, unique(GMC_Psych_LifeSat), c("-1 SD", "0 SD", "1 SD"))) %>%
+  ggplot(aes(x = age, y = pred, color = LS)) +
+  geom_line() +
+  facet_wrap(~trait, nrow = 2) +
+  theme_classic()
+```
+
+
+# Comparison to ANOVA  
+We'll return to this. I think we've got enough to do for this week.  
+
