@@ -52,13 +52,15 @@ For help with this, see https://emoriebeck.github.io/R-tutorials/purrr/. I'll gi
 Once you've got the codebook, we should be ready to go. 
 
 ```{r}
-# wd <- "https://github.com/emoriebeck/R-tutorials/blob/master/RA_Files/Week_5_Logistic_Regression"
-wd <- "~/Documents/Github/R-tutorials/RA_Files/Week_5_Logistic_Regression"
+wd <- "https://github.com/emoriebeck/R-tutorials/blob/master/00_personality-course/Week_5_Logistic_Regression"
+# wd <- "~/Documents/Github/R-tutorials/RA_Files/Week_5_Logistic_Regression"
 # load your codebook 
 # destfile <- "Codebook_EDB.xlsx"
 # curl::curl_download(sprintf("%s/Codebook_EDB.xlsx?raw=true", wd), destfile)
-destfile <- sprintf("%s/Codebook_EDB.xlsx", wd)
-codebook <- readxl::read_excel(destfile) %>%
+destfile <- sprintf("%s/Codebook_EDB.xlsx?raw=true", wd)
+p1f <- tempfile()
+download.file(destfile, p1f, mode="wb")
+codebook <- readxl::read_excel(p1f) %>%
   mutate(Item = stringr::str_to_lower(Item)) %>%
   filter(class != "group")
 ```
@@ -72,8 +74,8 @@ read_fun <- function(file, year){
   print(year)
   old.names <- (codebook %>% filter(Year == year & class %in% c("group", "predictor", "proc")))$Item
   new.names <- (codebook %>% filter(Year == year & class %in% c("group", "predictor", "proc")))$new_name
-  # l.file <- url(sprintf("%s/data/%sp.sav?raw=true", wd, file))
-  l.file <- sprintf("%s/data/%sp.sav", wd, file)
+  l.file <- url(sprintf("%s/data/%sp.sav?raw=true", wd, file))
+  # l.file <- sprintf("%s/data/%sp.sav", wd, file)
   z <- haven::read_sav(l.file) %>%
     select(one_of(all.old.cols), one_of(old.names)) %>%
     setNames(c(all.new.cols, new.names)) 
