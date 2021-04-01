@@ -52,9 +52,15 @@ A good workflow starts by keeping your files organized outside of `R`. A typical
 
 You can set this up outside of `R`, but I'm going to quickly show you how to set up inside `R`.  
 
+```{r get data, echo = F}
+data_source <- "https://github.com/emoriebeck/R-tutorials/raw/master/06_workflow/06_workflow.zip"
+data_dest <- "~/Desktop/06_workflow.zip"
+download.file(data_source, data_dest)
+unzip(data_dest, exdir = "~/Desktop")
+```
+
 ```{r, results='hide'}
-data_path <- "~/Desktop/R_workshop_11_01"
-dir.create(data_path)
+data_path <- "~/Desktop/06_workflow"
 c("data", "scripts", "results", "manuscript", "experimental materials", 
   "preregistration", "papers") %>%
   paste(data_path, ., sep = "/") %>%
@@ -123,7 +129,7 @@ Below, I will demonstrate each of these.
 Below, I'll load in the codebook we will use for this study, which will include all of the above columns. 
 ```{r codebook}
 # set the path
-wd <- "https://github.com/emoriebeck/R-tutorials/blob/master/wustl_r_workshops/workflow"
+wd <- "https://github.com/emoriebeck/R-tutorials/blob/master/06_workflow"
 
 download.file(
   url      = sprintf("%s/data/codebook.csv?raw=true", wd), 
