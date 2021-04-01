@@ -15,22 +15,42 @@ output:
 knitr::opts_chunk$set(echo = TRUE, message = F, warning = F, cache = F)
 ```
 
-## R Markdown
-
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
-
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
-
-```{r cars}
-summary(cars)
+```{r}
+library(psych)
+library(tidyverse)
 ```
 
-## Including Plots
+# Review  
 
-You can also embed plots, for example:
+In the last tutorial, we covered a series of functions from the `dplyr` package that are useful for data manipulation, including `filter()`, `select()`, `arrange()`, `group_by()`, `mutate()`, and `summarize()` / `summarise()`.  
 
-```{r pressure, echo=FALSE}
-plot(pressure)
-```
+# `tidyr`
+Today, we'll build off these useful functions for data manipulation with useful tools from the `tidyr` that are fantastic for data *wrangling*. Specifically, we'll cover:  
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+1. `pivot_longer()`, which takes a "wide" format data frame and makes it long.  
+2. `pivot_wider()`, which takes a "long" format data frame and makes it wide.  
+
+Then, we'll actually step back and cover a few additional functions from the `dplyr` package that are useful for merging, or joining, different data frames together, including:  
+
+3. `full_join()`, which merges *all* rows in either data frame provided as arguments.  
+4. `inner_join()`, which merges rows whose keys are present in *both* data frames provided as arguments.  
+5. `left_join()`, which "prioritizes" the first data set provided as an argument.  
+6. `right_join()`, which "prioritizes" the second data set provided as an argument.  
+
+There are a few additional join functions within `dplyr`, including`anti_join()` and `semi_join()`, which have utility as well, but I'll just direct you to their documentation to keep this from getting overwhelming.  
+
+# Key `tidyr` Functions  
+## 1. `pivot_longer()`  
+
+## 2. `pivot_wider()`  
+
+# More `dplyr` Functions  
+## 3. `full_join()`  
+
+## 4. `inner_join()`  
+
+## 5. `left_join()`  
+
+## 6. `right_join()`  
+
+

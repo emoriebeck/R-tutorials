@@ -130,19 +130,26 @@ This works fine in this simple case, but where `purrr` really shines in when you
 
 But first, the simple case of reading data. The code below will download a .zip file when you run it. Once, you do, navigate to your Desktop to unzip the folder. You should now be able to run the rest of the code.    
 
-```{r get data}
+```{r get data, eval = F, echo = F}
 data_source <- "https://github.com/emoriebeck/R-tutorials/raw/master/wustl_r_workshops/purrr.zip"
 data_dest <- "~/Desktop/purrr.zip"
 download.file(data_source, data_dest)
 ```
 
-
 ```{r read data ex1, eval = T}
-data_path <- "~/Desktop/purrr"
+library(httr)
+list_files_github <- function(){
+  req <- GET("https://api.github.com/repos/emoriebeck/R-tutorials/git/trees/master?recursive=1")
+  stop_for_status(req)
+  filelist <- unlist(lapply(content(req)$tree, "[", "path"), use.names = F)
+  grep("05_purrr/data/example_1/", filelist, value = TRUE, fixed = TRUE)
+}
+
+data_path <- "https://media.githubusercontent.com/media/emoriebeck/R-tutorials/master/05_purrr"
 df1 <- tibble(
-  ID = list.files(sprintf("%s/data/example_1", data_path))
+  ID = list_files_github() %>% str_remove_all(., "05_purrr/data/example_1") %>% str_remove_all(., "[a-z A-Z_.//]")
   ) %>%
-  mutate(data = map(ID, ~read_csv(sprintf("%s/data/example_1/%s", data_path, .)))) %>%
+  mutate(data = map(ID, ~read_csv(sprintf("%s/data/example_1/%s.csv", data_path, .)))) %>%
   unnest(data) 
 ```
 
@@ -158,7 +165,7 @@ We'll return to `nest()` later to demonstrate how anything you would iterate acr
 # Exercise: Reading in Subject-Level Data  
 
 ```{r codebook}
-data_path <- "~/Desktop/purrr"
+# data_path <- "~/Desktop/purrr"
 codebook <- sprintf("%s/data/codebook_ex1.csv", data_path) %>% read_csv(.)
 codebook
 ```
@@ -176,9 +183,9 @@ Now, that we have a codebook, what are the next steps?
 old.names <- codebook$old_name # pull old names in raw data from codebook  
 new.names <- codebook$new_name # pull new names from codebook  
 df1 <- tibble(
-  ID = list.files(sprintf("%s/data/example_1", data_path))
+  ID = list_files_github() %>% str_remove_all(., "05_purrr/data/example_1") %>% str_remove_all(., "[a-z A-Z_.//]")
   ) %>%
-  mutate(data = map(ID, ~read_csv(sprintf("%s/data/example_1/%s", data_path, .)))) %>%
+  mutate(data = map(ID, ~read_csv(sprintf("%s/data/example_1/%s.csv", data_path, .)))) %>%
   unnest(data) %>%
   select(ID, count, one_of(old.names)) %>% # select columns from codebook in loaded data  
   setNames(c("ID", "count", new.names)) # rename columns with new names  

@@ -1,0 +1,416 @@
+---
+title: "Developing Your `R` Workflow"
+author: "Emorie D Beck"
+institution: "Washington University in St. Louis"
+date: "`r Sys.setlocale('LC_TIME', 'C'); format(Sys.time(), '%d\\\\. %B %Y')`"
+output:
+  html_document:
+    theme: united
+    highlight: tango
+    df_print: paged
+    code_folding: show
+    toc: true
+    toc_float: true
+    toc_depth: 2
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r, echo = F}
+knitr::opts_chunk$set(echo = FALSE, message = F, warning = F, error = F)
+```
+
+
+<a href="https://raw.githubusercontent.com/emoriebeck/R-tutorials/master/06_workflow/workflow.Rmd" download>Download .Rmd (won't work in Safari or IE)</a>  
+<a href="https://github.com/emoriebeck/R-tutorials/tree/master/06_workflow" target="_blank">See GitHub Repository</a>  
+
+# What Are Data?  
+Data are the core of everything that we do in statistical analysis. Data come in many forms, and I don't just mean `.csv`, `.xls`, `.sav`, etc. Data can be wide, long, documented, fragmented, messy, and about anything else that you can imagine.  
+
+Although data could arguably be more means than end in psychology, the importance of understanding the structure and format of your data cannot overstated. Failure to understand your data could end in improper techniques and flagrantly wrong inferences at worst.  
+
+In this tutorial, we are going to talk data management and basic data cleaning. Earlier tutorials will go more in depth into data cleaning and reshaping. This tutorial is meant to take what you learned in those and to help you to think about those in more nuanced ways and develop a functional workflow for conducting your own research.  
+
+# Starting Your Workflow  
+
+```{r silent packages, echo = F}
+# load packages
+library(psych)
+library(plyr)
+library(tidyverse)
+```
+
+A good workflow starts by keeping your files organized outside of `R`. A typical research project typically involves: 
+
+1. Data  
+2. Scripts  
+3. Results  
+4. Manuscript  
+5. Experimental Materials (optional)  
+6. Preregistration  
+7. Papers  
+
+You can set this up outside of `R`, but I'm going to quickly show you how to set up inside `R`.  
+
+```{r, results='hide'}
+data_path <- "~/Desktop/R_workshop_11_01"
+dir.create(data_path)
+c("data", "scripts", "results", "manuscript", "experimental materials", 
+  "preregistration", "papers") %>%
+  paste(data_path, ., sep = "/") %>%
+  map(., dir.create)
+```
+
+
+# Workspace  
+When I create an `rmarkdown` document for my own research projects, I always start by setting up my my workspace. This involves 3 steps:  
+
+1. Packages  
+2. Codebook(s)  
+3. Data  
+
+Below, we will step through each of these separately, setting ourselves up to (hopefully) flawlessly communicate with `R` and our data. 
+
+## Packages  
+Packages seems like the most basic step, but it is actually very important. <strong>ALWAYS LOAD YOUR PACKAGES IN A VERY INTENTIONAL ORDER AT THE BEGINNING OF YOUR SCRIPT.</strong> Package conflicts suck, so it needs to be shouted.  
+
+For this tutorial, we are going to quite simple. We will load the `psych` package for data descriptives, some options for cleaning and reverse coding, and some evaluations of our scales. The `plyr` package is the predecessor of the `dplyr` package, which is a core package of the `tidyverse`, which you will become quite familiar with in these tutorials. I like the `plyr` package because it contains a couple of functions (e.g. `mapvalues()`) that I find quite useful. Finally, we load the `tidyverse` package, which is actually a complilation of 8 packages. Some of these we will use today and some we will use in later tutorials. All are very useful and are arguably some of the most powerful tools `R` offers.  
+
+```{r packages}
+# load packages
+library(psych)
+library(plyr)
+library(tidyverse)
+```
+
+## Codebook  
+The second step is a codebook. Arguably, this is the first step because you should *create* the codebook long before you open `R` and load your data. 
+
+In this case, we are going to using some data from the [German Socioeconomic Panel Study (GSOEP)](https://www.diw.de/en/soep/), which is an ongoing Panel Study in Germany. Note that these data are for teaching purposes only, shared under the license for the Comprehensive SOEP teaching dataset, which I, as a contracted SOEP user, can use for teaching purposes. These data represent select cases from  the full data set and should not be used for the purpose of publication. The full data are available for free at https://www.diw.de/en/diw_02.c.222829.en/access_and_ordering.html.   
+
+For this tutorial, I created the codebook for you <a href="https://github.com/emoriebeck/R-tutorials/raw/master/ALDA/week_1_descriptives/codebook.csv" download>(Download (won't work in Safari or IE))</a>, and included what I believe are the core columns you may need. Some of these columns may not be particularly helpful for every dataset. 
+
+Here are my core columns that are based on the original data:  
+1. **dataset**: this column indexes the **name** of the dataset that you will be pulling the data from. This is important because we will use this info later on (see   purrr   tutorial) to load and clean specific data files. Even if you don't have multiple data sets, I believe consistency is more important and suggest using this.  
+2. **old_name**: this column is the name of the variable in the data you are pulling it from. This should be exact. The goal of this column is that it will allow us to   select()   variables from the original data file and rename them something that is more useful to us.  
+3. **item_text**: this column is the original text that participants saw or a description of the item.  
+4. **category**: broad categories that different variables can be put into. I'm a fan of naming them things like "outcome", "predictor", "moderator", "demographic", "procedural", etc. but sometimes use more descriptive labels like "Big 5" to indicate the model from which the measures are derived.  
+5. **label**: label is basically one level lower than category. So if the category is Big 5, the label would be, or example, "A" for Agreeableness, "SWB" for subjective well-being, etc. This column is most important and useful when you have multiple items in a scales, so I'll typically leave this blank when something is a standalone variable (e.g. sex, single-item scales, etc.).  
+6. **item_name**: This is the lowest level and most descriptive variable. It indicates which item in scale something is. So it may be "kind" for Agreebleness or "sex" for the demographic biological sex variable.  
+7. **new_name**: This is a column that brings together much of the information we've already collected. It's purpose is to be the new name that we will give to the variable that is more useful and descriptive to us. This is a constructed variable that brings together others. I like to make it a combination of "category", "label", "item_name", and year using varying combos of "_" and "." that we can use later with tidyverse functions. I typically construct this variable in Excel using the   CONCATENATE()   function, but it could also be done in `R`. The reason I do it in Excel is that it makes it easier for someone who may be reviewing my codebook.  
+8. **scale**: this column tells you what the scale of the variable is. Is it a numeric variable, a text variable, etc. This is helpful for knowing the plausible range. 
+9. **recode**: sometimes, we want to recode variables for analyses (e.g. for categorical variables with many levels where sample sizes for some levels are too small to actually do anything with it). I use this column to note the kind of recoding I'll do to a variable for transparency.  
+
+Here are additional columns that will make our lives easier or are applicable to some but not all data sets:  
+10. **reverse**: this column tells you whether items in a scale need to be reverse coded. I recommend coding this as 1 (leave alone) and -1 (reverse) for reasons that will become clear later.  
+11. **mini**: this column represents the minimum value of scales that are numeric. Leave blank otherwise.  
+12. **maxi**: this column represents the maximumv alue of scales that are numeric. Leave blank otherwise.  
+13. **year**: for longitudinal data, we have several waves of data and the name of the same item across waves is often different, so it's important to note to which wave an item belongs. You can do this by noting the wave (e.g. 1, 2, 3), but I prefer the actual year the data were collected (e.g. 2005, 2009, etc.)  
+15. **meta**: Some datasets have a meta name, which essentially means a name that variable has across all waves to make it clear which variables are the same. They are not always useful as some data sets have meta names but no great way of extracting variables using them. But they're still typically useful to include in your codebook regardless.  
+
+### Key Takeaways from Codebook Use  
+1. Reproducibility and Transparency  
+2. Creating Composites  
+3. Keeping Track of Classes of Variables  
+4. Easier Reverse-Coding  
+5. Easier Recoding  
+6. Your future self will thank you.  
+
+Below, I will demonstrate each of these.
+
+### Read in the Codebook   
+
+Below, I'll load in the codebook we will use for this study, which will include all of the above columns. 
+```{r codebook}
+# set the path
+wd <- "https://github.com/emoriebeck/R-tutorials/blob/master/wustl_r_workshops/workflow"
+
+download.file(
+  url      = sprintf("%s/data/codebook.csv?raw=true", wd), 
+  destfile = sprintf("%s/data/codebook.csv", data_path)
+  )
+
+# load the codebook
+(codebook <- sprintf("%s/data/codebook.csv", data_path) %>% 
+    read_csv(.) %>%
+    mutate(old_name = str_to_lower(old_name)))
+```
+
+
+## Data
+
+First, we need to load in the data. We're going to use three waves of data from the German Socioeconomic Panel Study, which is a longitudinal study of German households that has been conducted since 1984. We're going to use more recent data from three waves of personality data collected between 2005 and 2013.  
+
+*Note*: we will be using the teaching set of the GSOEP data set. I will not be pulling from the raw files as a result of this. I will also not be mirroring the format that you would usually load the GSOEP from because that is slightly more complicated and somethng we will return to in a later tutorial on <a  href="https://emoriebeck.github.io/R-tutorials/purrr/" target="_blank">`purrr` (link)</a> after we have more skills. I've left that code for now, but it won't make a lot of sense right now.  
+
+```{r data set up, eval = F}
+path <- "~/Box/network/other projects/PCLE Replication/data/sav_files"
+ref <- sprintf("%s/cirdef.sav", path) %>% haven::read_sav(.) %>% select(hhnr, rgroup20)
+read_fun <- function(Year){
+  vars <- (codebook %>% filter(year == Year | year == 0))$old_name
+  set <- (codebook %>% filter(year == Year))$dataset[1]
+  sprintf("%s/%s.sav", path, set) %>% haven::read_sav(.) %>%
+    full_join(ref) %>%
+    filter(rgroup20 > 10) %>%
+    select(one_of(vars)) %>%
+    gather(key = item, value = value, -persnr, -hhnr, na.rm = T)
+}
+
+vars <- (codebook %>% filter(year == 0))$old_name
+dem <- sprintf("%s/ppfad.sav", path) %>% 
+  haven::read_sav(.) %>%
+  select(vars)
+  
+tibble(year = c(2005:2015)) %>%
+  mutate(data = map(year, read_fun)) %>%
+  select(-year) %>% 
+  unnest(data) %>%
+  distinct() %>% 
+  filter(!is.na(value)) %>%
+  spread(key = item, value = value) %>%
+  left_join(dem) %>%
+  write.csv(., file = "~/Documents/Github/R-tutorials/ALDA/week_1_descriptives/data/week_1_data.csv", row.names = F)
+```
+
+This code below shows how I would read in and rename a wide-format data set using the codebook I created.  
+
+```{r load data}
+# download the file
+download.file(
+  url      = sprintf("%s/data/workflow_data.csv?raw=true", wd), 
+  destfile = sprintf("%s/data/workflow_data.csv", data_path)
+  )
+
+old.names <- codebook$old_name # get old column names
+new.names <- codebook$new_name # get new column names
+
+(soep <- sprintf("%s/data/workflow_data.csv", data_path) %>% # path to data
+  read_csv(.) %>% # read in data
+  select(old.names) %>% # select the columns from our codebook
+  setNames(new.names)) # rename columns with our new names
+```
+
+# Clean Data  
+
+## Recode Variables  
+Many of the data we work with have observations that are missing for a variety of reasons. In `R`, we treat missing values as `NA`, but many other programs from which you may be importing your data may use other codes (e.g. 999, -999, etc.). Large panel studies tend to use small negative values to indicate different types of missingness.  This is why it is important to note down the scale in your codebook. That way you can check which values may need to be recoded to explicit `NA` values. 
+
+In the GSOEP, `-1` to `-7` indicate various types of missing values, so we will recode these to `NA`. To do this, we will use one of my favorite functions, `mapvalues()`, from the `plyr` package. In later tutorials where we read in and manipulate more complex data sets, we will use `mapvalues()` a lot. Basically, mapvalues takes 4 key arguments: (1) the variable you are recoding, (2) a vector of initial values `from` which you want to (3) recode your variable `to` using a vector of new values in the same order as the old values, and (4) a way to turn off warnings if some levels are not in your data (`warn_missing = F`).  
+
+```{r recode}
+(soep <- soep %>%
+  mutate_all(~as.numeric(mapvalues(., from = seq(-1,-7, -1), # recode negative 
+                to = rep(NA, 7), warn_missing = F)))) # values to NA
+```
+
+
+## Reverse-Scoring  
+Many scales we use have items that are positively or negatively keyed. High ratings on positively keyed items are indicative of being high on a construct. In contrast, high ratings on negatively keyed items are indicative of being low on a construct. Thus, to create the composite scores of constructs we often use, we must first "reverse" the negatively keyed items so that high scores indicate being higher on the construct. 
+
+There are a few ways to do this in `R`. Below, I'll demonstrate how to do so using the `reverse.code()` function in the `psych` package in `R`. This function was built to make reverse coding more efficient (i.e. please don't run every item that needs to be recoded with separate lines of code!!).
+
+Before we can do that, though, we need to restructure the data a bit in order to bring in the reverse coding information from our codebook. We will talk more about what's happening here in later tutorials on  `tidyr`, so for now, just bear with me.  
+
+```{r reverse code}
+(soep_long <- soep %>%
+  gather(key = item, value = value, -contains("Procedural"), # change to long format
+         -contains("Demographic"), na.rm = T) %>%
+  left_join(codebook %>% select(item = new_name, reverse, mini, maxi)) %>% # bring in codebook
+  separate(item, c("type", "item"), sep = "__") %>% # separate category
+  separate(item, c("item", "year"), sep = "[.]") %>% # seprate year
+  separate(item, c("item", "scrap"), sep = "_") %>% # separate scale and item
+  mutate(value = as.numeric(value), # change to numeric
+         value = ifelse(reverse == -1, 
+            reverse.code(-1, value, mini = mini, maxi = maxi), value)))
+```
+
+## Create Composites   
+
+Now that we have reverse coded our items, we can create composites. 
+
+### BFI-S 
+We'll start with our scale -- in this case, the Big 5 from the German translation of the BFI-S. 
+
+Here's the simplest way, which is also the long way because you'd have to do it for each scale in each year, which I don't recommend. 
+
+```{r}
+soep$C.2005 <- with(soep, rowMeans(cbind(`Big 5__C_thorough.2005`, `Big 5__C_lazy.2005`, 
+                          `Big 5__C_efficient.2005`), na.rm = T)) 
+```
+
+But personally, I don't have a desire to do that 15 times, so we can use our codebook and `dplyr` to make our lives a whole lot easier.  
+
+```{r b5 composites}
+soep <- soep %>% select(-C.2005) # get rid of added column
+
+(b5_soep_long <- soep_long %>%
+  filter(type == "Big 5") %>% # keep Big 5 variables
+  group_by(Procedural__SID, item, year) %>% # group by person, construct, & year
+  summarize(value = mean(value, na.rm = T)) %>% # calculate means
+  ungroup() %>% # ungroup
+  left_join(soep_long %>% # bring demographic info back in 
+    select(Procedural__SID, DOB = Demographic__DOB, Sex = Demographic__Sex) %>%
+    distinct()))
+```
+
+### Life Events  
+We also want to create a variable that indexes whether our participants experienced any of the life events during the years of interest (2005-2015).  
+```{r events}
+(events_long <- soep_long %>%
+  filter(type == "Life Event") %>% # keep only life events
+  group_by(Procedural__SID, item) %>% # group by person and event
+  summarize(le_value = sum(value, na.rm = T), # sum up whether they experiened the event at all
+            le_value = ifelse(le_value > 1, 1, 0)) %>% # if more than once 1, otherwise 0
+   ungroup())
+```
+
+## Create Combination Data Set  
+For the analyses I'd want to do with this data set, I'd want to combine every combination of personality traits with every combination of event we have data for each person for. In other words, I'm looking for a data frame that looks like this:  
+
+SID     |  year  |   Event   |  le_value   | Trait   |   p_value  
+------- | ------ | --------- | ----------- | ------- | -----------
+
+```{r combine data}
+# Create combined data frame  
+(combined_long <- b5_soep_long %>% # take Big Five Data 
+  spread(item, value) %>% # Spread it wide 
+  full_join(events_long %>% rename(Event = item)) %>% # Join it with Events
+  filter(!is.na(Event)) %>% # take out people who don't have event data
+  gather(key = Trait, value = p_value, A:O)) # change to doubly long
+```
+
+### Save Your Data  
+```{r save data}
+  write.csv(
+    x = combined_long
+    , file = sprintf("%s/data/clean_data_%s.csv", data_path, Sys.Date())
+    , row.names = F
+    )
+```
+
+
+# Descriptives  
+Descriptives of your data are incredibly important. They are your first line of defense against things that could go wrong later on when you run inferential stats. The help you check the distribution of your variables (e.g. non-normally distributed), look for implausible values, etc. 
+
+
+## Big Five Descriptives  
+
+There are lots of ways to create great tables of descriptives. My favorite way is using `dplyr`, but we will save that for a later lesson on creating great APA style tables in `R`. For now, we'll use a wonderfully helpful function from the `psych` package called `describe()` in conjunction with a small amount of `tidyr` to reshape the data. 
+
+```{r b5 descriptives}
+b5_soep_long  %>%
+  unite(tmp, item, year, sep = "_") %>% # make new column that joins item and year
+  spread(tmp, value) %>% # make wide because that helps describe
+  describe(.) %>% # call describe 
+  data.frame %>%
+  rownames_to_column(var = "V")
+```
+
+## Big Five Distributions  
+```{r b5 histograms}
+b5_soep_long %>%
+  ggplot(aes(x = value)) + 
+    geom_histogram() +
+    facet_grid(year ~ item) +
+    theme_classic()
+```
+
+## Life Events Descriptives  
+For count variables, like life events, we need to use something slightly different. We're typically more interested in counts -- in this case, how many people experienced each life event in the 10 years we're considering?  
+
+To do this, we'll use a little bit of `dplyr` rather than the base `R` function `table()` that is often used for count data. Instead, we'll use a combination of `group_by()` and `n()` to get the counts by group. In the end, we're left with a nice little table of counts.    
+
+```{r life event descriptives}
+events_long %>%
+  group_by(item, le_value) %>% 
+  summarize(N = n()) %>%
+  ungroup() %>%
+  spread(le_value, N)
+```
+
+## Life Event Plots
+```{r life event plots}
+events_long %>%
+  mutate(le_value = mapvalues(le_value, 0:1, c("No Event", "Event"))) %>%
+  ggplot(aes(x = le_value, fill = le_value)) +
+    scale_fill_manual(values = c("cornflowerblue", "gray")) +
+    geom_bar(color = "black")  +
+    facet_wrap(~item, nrow = 2) +
+    theme_classic() +
+    theme(legend.position = "bottom")
+```
+
+
+## Scale Reliability  
+When we work with scales, it's often a good idea to check the internal consistency of your scale. If the scale isn't performing how it should be, that could critically impact the inferences you make from your data. 
+
+To check the internal consistency of our Big 5 scales, we will use the `alpha()` function from the `psych` package, which will give us Cronbach's \alpha as well as a number of other indicators of internal consistency.  
+
+Here's the way you may have seen / done this in the past.  
+```{r old alpha}
+alpha.C.2005 <- with(soep, psych::alpha(x = cbind(`Big 5__C_thorough.2005`, 
+                                  `Big 5__C_lazy.2005`, `Big 5__C_efficient.2005`)))
+```
+
+But again, doing this 15 times would be quite a pain and would open you up to the possibility of a lot of copy and paste errors.  
+
+So instead, to do this, I'm going to use a mix of the tidyverse. At first glance, it may seem complex but as you move through other tutorials (particularly the `purrr` tutorial), it will begin to make much more sense.  
+
+```{r purrr alpha}
+# short function to reshape data and run alpha
+alpha_fun <- function(df){
+  df %>% spread(scrap,value) %>% psych::alpha(.)
+}
+
+(alphas <- soep_long %>%
+  filter(type == "Big 5") %>% # filter out Big 5
+  select(Procedural__SID, item:value) %>% # get rid of extra columns
+  group_by(item, year) %>% # group by construct and year
+  nest() %>% # nest the data
+  mutate(alpha_res = map(data, alpha_fun), # run alpha
+         alpha = map(alpha_res, ~.$total[2])) %>% # get the alpha value
+  unnest(alpha)) # pull it out of the list column
+```
+
+## Zero-Order Correlations
+Finally, we often want to look at the zero-order correlation among study variables to make sure they are performing as we think they should. 
+
+To run the correlations, we will need to have our data in wide format, so we're going to do a little bit of reshaping before we do. 
+
+```{r correlations}
+b5_soep_long %>%
+  unite(tmp, item, year, sep = "_") %>%
+  spread(key = tmp, value = value) %>% 
+  select(-Procedural__SID) %>%
+  cor(., use = "pairwise") %>%
+  round(., 2)
+```
+
+This is a lot of values and a little hard to make sense of, so as a bonus, I'm going to give you a little bit of more complex code that makes this more readable (and publishable ).  
+
+```{r correlation plot, fig.cap="Correlations among Personality Indicators. Values on the diagonal represent Chronbach's alpha for each scale in each year. Within-trait correlations represent test-retest correlations."}
+r <- b5_soep_long %>%
+  unite(tmp, item, year, sep = "_") %>%
+  spread(key = tmp, value = value) %>% 
+  select(-Procedural__SID, -DOB, -Sex) %>%
+  cor(., use = "pairwise") 
+
+r[upper.tri(r, diag = T)] <- NA
+diag(r) <- (alphas %>% arrange(item, year))$std.alpha
+
+r %>% data.frame %>%
+  rownames_to_column("V1") %>%
+  gather(key = V2, value = r, na.rm = T, -V1) %>%
+  separate(V1, c("T1", "Year1"), sep = "_") %>%
+  separate(V2, c("T2", "Year2"), sep = "_") %>%
+  mutate_at(vars(Year1), ~factor(., levels = c(2013, 2009, 2005))) %>%
+  ggplot(aes(x = Year2, y = Year1, fill = r)) +
+    geom_raster() + 
+  scale_fill_gradient2(low = "blue", high = "red", mid = "white", 
+   midpoint = 0, limit = c(-1,1), space = "Lab", 
+   name="Correlations") +  
+  geom_text(aes(label = round(r,2))) +
+    facet_grid(T1 ~ T2) +
+    theme_classic()
+```
+
