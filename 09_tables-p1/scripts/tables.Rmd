@@ -1,5 +1,5 @@
 ---
-title: "APA Tables"
+title: "09: APA Tables Part 1"
 author: "Emorie D Beck"
 date: "April 23, 2020"
 output:
@@ -71,14 +71,14 @@ The data we'll use fall into three categories:
 First, the code below will download a .zip file when you run it. Once, you do, navigate to your Desktop to unzip the folder. You should now be able to run the rest of the code.  
 
 ```{r get data}
-data_source <- "https://github.com/emoriebeck/R-tutorials/raw/master/wustl_r_workshops/tables.zip"
-data_dest <- "~/Desktop/tables.zip"
+data_source <- "https://github.com/emoriebeck/R-tutorials/raw/master/09_tables-p1/09_tables-p1.zip"
+data_dest <- "~/Desktop/09_tables-p1.zip"
 download.file(data_source, data_dest)
+unzip(data_dest, exdir = "~/Desktop")
 ```
 
 ```{r}
 wd <- "~/Desktop/tables"
-
 (gsoep <- sprintf("%s/data/gsoep.csv", wd) %>% read_csv())
 ```
 
