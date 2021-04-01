@@ -1,5 +1,5 @@
 ---
-title: "Data Descriptives and Management"
+title: "07: Data Descriptives and Management"
 subtitle: "Applied Longitudinal Data Analysis"
 author: "Emorie D Beck"
 date: "`r Sys.setlocale('LC_TIME', 'C'); format(Sys.time(), '%d\\\\. %B %Y')`"
@@ -83,6 +83,13 @@ wd <- "https://github.com/emoriebeck/R-tutorials/blob/master/07_descriptives"
     mutate(old_name = str_to_lower(old_name)))
 ```
 
+
+```{r}
+data_source <- "https://github.com/emoriebeck/R-tutorials/raw/master/07_descriptives/07_descriptives.zip"
+data_dest <- "~/Desktop/07_descriptives.zip"
+download.file(data_source, data_dest)
+unzip(data_dest, exdir = "~/Desktop")
+```
 
 ## Data
 
