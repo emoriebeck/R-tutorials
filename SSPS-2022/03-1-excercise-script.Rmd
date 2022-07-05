@@ -1,0 +1,897 @@
+---
+title: 'SSPS: Personality Dynamics'
+author: 'Emorie D Beck'
+output:
+  html_document:
+    theme: united
+    highlight: tango
+    df_print: paged
+    code_folding: show
+    toc: true
+    toc_float: true
+    number_sections: true
+date: '2022-07-06'
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Workspace  
+## Packages  
+```{r packages}
+pkg <- c("knitr", "lme4", "psych", "EGAnet", "tidymodels", "vip", "qgraph", "parameters", "RColorBrewer", "lubridate", "broom", "broom.mixed", "plyr", "tidyverse")
+if(any(!pkg %in% rownames(installed.packages()))){
+  pkg <- pkg[!pkg %in% rownames(installed.packages())]
+  lapply(pkg, install.packages)
+}
+
+library(knitr)         # rmarkdown
+library(lme4)          # estimate mlms
+library(psych)         # psychometrics, descriptives, structural models, and more
+library(EGAnet)        # exploratory graph analysis
+library(RColorBrewer)
+library(vip)
+library(qgraph)
+library(lubridate)
+library(broom)
+library(broom.mixed)
+library(plyr)          # data wrangling
+library(tidyverse)     # data wrangling, cleaning, and more
+library(tidymodels)    # framework for estimating ML and other models
+```
+
+## Working Directory  
+```{r dir}
+wd <- "https://github.com/emoriebeck"
+```
+
+# Exercise 1: Working with Dynamic Data  
+## Load in Data  
+```{r e1 data}
+dat <- read_csv(url(sprintf("%s/ESM-structure/blob/main/02-data/02-facet-wide/02-imputed/02-participant-data/csv/221.csv?raw=true", wd))) %>%
+  separate(Full_Date, c("date", "time"), sep = "[ ]") %>%
+  mutate(day = as.numeric(mapvalues(date, unique(date), 1:length(unique(date))))) %>%
+  group_by(day) %>%
+  mutate(beep = 1:n()) %>% 
+  ungroup() %>%
+  filter(beep <=4)
+```
+
+## Pad Missing Observations  
+```{r pad missingness}
+dat <- dat %>% 
+  full_join(
+    crossing(
+      day = unique(dat$day)
+      , beep = 1:6
+      )
+  ) %>%
+  arrange(day, beep)
+```
+
+## Add Lags  
+```{r add lags}
+dat <- dat %>%
+  mutate_at(vars(-date, -time, -all_beeps, -day, -beep), lst(lag = lag))
+
+# how many rows without lags?
+dat %>% 
+  select(-contains("lag")) %>%
+  drop_na()
+
+# how many rows with lags
+dat %>% 
+  select(-date, -time, -all_beeps) %>%
+  drop_na()
+```
+
+# Exercise 2: Basic Dynamic Indices  
+
+## Intraindividual SD (Within-Person Variability)  
+```{r isd}
+sd(dat$agreeableness_Compassion, na.rm = T)
+
+# the tidy way
+dat %>%
+  select(-contains("lag"), -date, -time, -all_beeps, -day, -beep) %>%
+  summarize_all(sd, na.rm = T) %>%
+  pivot_longer(
+    cols = everything()
+    , names_to = "var"
+    , values_to = "sd"
+  )
+
+# base R
+sapply(
+  dat %>%
+    select(-contains("lag"), -date, -time, -all_beeps, -day, -beep)
+  , function(x) sd(x, na.rm = T)
+  )
+```
+
+## Mean Squared Successive Differences  (MSSD)  
+```{r mssd}
+mssd(dat$agreeableness_Compassion)
+
+# the tidy way
+dat %>%
+  select(-contains("lag"), -date, -time, -all_beeps, -day, -beep) %>%
+  summarize_all(mssd) %>%
+  pivot_longer(
+    cols = everything()
+    , names_to = "var"
+    , values_to = "mssd"
+  )
+
+# base R
+sapply(
+  dat %>%
+    select(-contains("lag"), -date, -time, -all_beeps, -day, -beep)
+  , mssd
+  )
+```
+
+## Inertia (AR(1) autocorrelations)  
+```{r inertia}
+cor(dat$agreeableness_Compassion, dat$agreeableness_Compassion_lag, use = "pairwise")
+
+# the tidy way
+dat %>%
+  select(-contains("lag")) %>%
+  pivot_longer(
+    cols = c(-date, -time, -all_beeps, -day, -beep)
+    , names_to = "var"
+    , values_to = "value"
+    ) %>%
+  group_by(var) %>%
+  summarize(ar1 = cor(value, lag(value), use = "pairwise"))
+```
+
+## Bringing It All Together  
+```{r}
+dat %>%
+  select(-contains("lag")) %>%
+  pivot_longer(
+    cols = c(-date, -time, -all_beeps, -day, -beep)
+    , names_to = "var"
+    , values_to = "value"
+    ) %>%
+  group_by(var) %>%
+  summarize(
+    sd = sd(value, na.rm = T)
+    , mssd = mssd(value)
+    , ar1 = cor(value, lag(value), use = "pairwise")
+    )
+```
+
+# Exercise 3: Regularized Regression Using Elastic Net and tidymodels  
+## Load Data  
+First, we need to load the data and do some feature engineering  
+```{r e5 data load}
+load(url(sprintf("%s/behavior-prediction/blob/main/04-data/02-model-data/216_prcrst_psychological_BFI-2_no%%20time.RData?raw=true", wd)))
+d
+```
+
+## Feature Engineering using Time Stamps  
+```{r feat engin}
+dtime <- d %>%
+  select(Full_Date) %>%
+  mutate(Full_Date = ymd_hm(Full_Date)
+         , wkday = wday(Full_Date, label = T)
+         , Hour = hour(Full_Date)
+         , Mon =     ifelse(wkday == "Mon", 1, 0)
+         , Tue =     ifelse(wkday == "Tue", 1, 0)
+         , Wed =     ifelse(wkday == "Wed", 1, 0)
+         , Thu =     ifelse(wkday == "Thu", 1, 0)
+         , Fri =     ifelse(wkday == "Fri", 1, 0)
+         , Sat =     ifelse(wkday == "Sat", 1, 0)
+         , Sun =     ifelse(wkday == "Sun", 1, 0)
+         , morning = ifelse(Hour  >= 5  & Hour < 11, 1, 0)
+         , midday =  ifelse(Hour  >= 11 & Hour < 17, 1, 0)
+         , evening = ifelse(Hour  >= 5  & Hour < 22, 1, 0)) %>%
+  
+  ## sequential time differences
+  mutate(tdif =      as.numeric(difftime(Full_Date, lag(Full_Date), units = "hours"))) %>%
+  filter(is.na(tdif) | tdif > 1) %>%
+  mutate(tdif =      as.numeric(difftime(Full_Date, lag(Full_Date), units = "hours"))
+         , tdif =    ifelse(is.na(tdif), 0, tdif)
+         , cumsumT = cumsum(tdif)) %>%
+  
+  ## timing variables
+  mutate(linear =    as.numeric(scale(cumsumT))
+         , quad =    linear^2
+         , cub =     linear^3
+         , sin1p =   sin(((2*pi)/24)*cumsumT)
+         , sin2p =   sin(((2*pi)/12)*cumsumT)
+         , cos1p =   cos(((2*pi)/24)*cumsumT)
+         , cos2p =   cos(((2*pi)/12)*cumsumT)
+         ) %>%
+  
+  ## keep key variables and reshape
+  select(Full_Date, Mon:evening, linear:cos2p)
+
+dummy_vars <- c("o_value", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"
+                , "morning", "midday", "evening")
+
+d <- d %>%
+  mutate(Full_Date = ymd_hm(Full_Date)) %>%
+  full_join(dtime) %>%
+  arrange(Full_Date) %>%
+  select(-Full_Date) %>%
+  mutate_at(vars(dummy_vars), factor) %>%
+  filter(complete.cases(.)); d
+```
+
+## Set-Up Data  
+```{r e5 data restruc}
+d_split <- initial_time_split(d, prop = 0.75); d_split
+d_train <- training(d_split); d_train
+d_test  <- testing(d_split); d_test
+```
+
+
+## Set-Up Preprocessing & Recipe in TidyModels  
+```{r glmnet recipe}
+# set up the data and formula
+time_vars <- c("cos1p", "cos2p", "cub", "linear", "quad", "sin1p", "sin2p")
+
+mod_recipe <- recipe(
+  o_value ~ .
+  , data = d_train
+  ) %>%
+  step_normalize(all_numeric(), -one_of(time_vars)) %>%
+  step_dummy(one_of(dummy_vars), -all_outcomes()) %>%
+  step_zv(all_numeric()) %>%
+  step_nzv(all_nominal(), unique_cut = 35); mod_recipe
+
+# set up the model specifications 
+tune_spec <- 
+  logistic_reg(
+    penalty = tune()
+    , mixture = tune()
+  ) %>% 
+  set_engine("glmnet") %>% 
+  set_mode("classification")
+
+# set up the ranges for the tuning functions 
+elnet_grid <- grid_regular(
+  penalty()
+  , mixture()
+  , levels = 10
+  )
+
+# set up the workflow: combine modeling spec with modeling recipe
+set.seed(345)
+elnet_wf <- workflow() %>%
+  add_model(tune_spec) %>%
+  add_recipe(mod_recipe)
+```
+
+## Run Rolling Origin-Validation  
+```{r cv, message = F, results = 'hide'}
+# set up the folds
+d_train_cv <- rolling_origin(
+    d_train, 
+    initial = 15, 
+    assess = 3,
+    skip = 2,
+    cumulative = TRUE
+  )
+
+# run our workflow from above across each fold
+elnet_res <- 
+    elnet_wf %>% 
+    tune_grid(
+      resamples = d_train_cv
+      , grid = elnet_grid
+      , control = control_resamples(save_pred = T)
+      )
+```
+
+## Choose the Best Model  
+```{r best mod}
+# plot the metrics across tuning parameters
+elnet_res %>%
+    collect_metrics() %>%
+      ggplot(aes(penalty, mean, color = mixture)) +
+      geom_point(size = 2) +
+      facet_wrap(~ .metric, scales = "free", nrow = 2) +
+      scale_x_log10(labels = scales::label_number()) +
+      scale_color_gradient(low = "gray90", high = "red") +
+      theme_classic()
+
+# select the best model based on AUC
+  best_elnet <- elnet_res %>%
+    # select_best("roc_auc")
+    select_best("accuracy")
+  
+  # set up the workflow for the best model
+  final_wf <- 
+    elnet_wf %>% 
+    finalize_workflow(best_elnet)
+  
+# run the final best model on the training data and save
+final_elnet <- 
+    final_wf %>%
+    fit(data = d_train) 
+```
+
+## Run the Model on the Test Set  
+```{r test performance}
+# run the final fit workflow of the training and test data together
+final_fit <- 
+    final_wf %>%
+    last_fit(d_split) 
+
+# final metrics (accuracy and roc)
+final_metrics <- final_fit %>%
+    collect_metrics(summarize = T); final_metrics
+```
+
+## Variable Importance  
+```{r vip}
+# variable importance
+final_var_imp <- final_elnet %>% 
+  pull_workflow_fit() %>% 
+  vi() %>%
+  slice_max(Importance, n = 10); final_var_imp
+```
+
+
+# Exercise 4: Dynamic Exploratory Graph Analysis  
+## Data Set-up  
+```{r e4 data setup}
+set.seed(5) # set a seed for randomly sampling 10 participants
+dat4 <- read_csv(url(sprintf("%s/ESM-structure/blob/main/02-data/02-facet-wide/02-imputed/facet_wide_imp.csv?raw=true", wd))) %>%
+  filter(complete.cases(.)) %>% # drop missing obs
+  group_by(SID) %>%
+  filter(n() >= 30) %>% # keep only people with reasonable #'s of obs
+  ungroup() %>%
+  filter(SID %in% sample(unique(.$SID), 10)) %>% # sample 10 px
+  mutate(wave = 1) %>% # create a wave "grouping" variable
+  arrange(wave, SID, all_beeps) %>% # reorder the data
+  select(-Full_Date, -all_beeps) %>% # drop columns that aren't ID, group, or indicators
+  as.data.frame() # this is important! dynEGA won't work on tibbles
+```
+
+## Run the Model  
+```{r e4 run dynEGA}
+# get numeric ID of the participant ID column
+idcol <- which(colnames(dat4) == "SID")
+gcol  <- which(colnames(dat4) == "wave")
+
+ega_ind <- dynEGA(
+  data = dat4 
+  , n.embed = 4 # embedding dimension
+  , tau = 1  # offset for embedding, similar to lag 1
+  , delta = 4 # time between obs
+  , level = "individual" # we want individual-level models 
+  , id = idcol # id column position
+  , group = gcol # group membership, in this case the wave
+  , use.derivatives = 1 # we want to use 1st order derivatives
+  , model = "glasso" 
+  , algorithm = "louvain" # the clustering algorithm for structure
+  , corr = "pearson" # type of correlation
+  , ncores = 6 # number of cores
+); ega_ind
+```
+
+## Explore the Object  
+First, let's look at the derivatives. These are stored as a list for each participant:  
+
+```{r exp deriv list}
+# derivatives list
+names(ega_ind$Derivatives$Estimates)
+
+# for one px
+ega_ind$Derivatives$Estimates$ID143 %>% as_tibble()
+```
+
+Or a large data frame:  
+```{r exp deriv df}
+ega_ind$Derivatives$EstimatesDF %>% as_tibble()
+```
+
+Now let's look at the EGA. These are also stored as a list for each participant.
+
+```{r exp dynEGA}
+names(ega_ind$dynEGA)
+
+names(ega_ind$dynEGA$ID143)
+```
+
+Here's the breakdown:  
+
+- `network` = regularized partial correlation matrix.  
+- `wc` = cluster membership how igraph produces it  
+- `n.dim` = number of cluster  
+- `cor.data` = zero-order correlations of the derivatives  
+- `mu` = hyperparameter for glasso, 0 means it uses BIC for model selection
+- `lambda` = regularization shrinkage parameter
+- `dim.variables` = also cluster membership, but as a data frame  
+
+```{r exp dynEGA more}
+ega_ind$dynEGA$ID143$network
+ega_ind$dynEGA$ID143$wc
+ega_ind$dynEGA$ID143$n.dim
+ega_ind$dynEGA$ID143$cor.data
+ega_ind$dynEGA$ID143$mu
+ega_ind$dynEGA$ID143$lambda
+ega_ind$dynEGA$ID143$dim.variables
+```
+
+## Plot the Results  
+Let's plot it, shall we? To do this, we'll use the `qgraph` package and my own stylistic preferences.  
+```{r e4 plot dynEGA}
+# now let's wrangle the names of the labels 
+tnames <- tibble(old = rownames(ega_ind$dynEGA$ID143$network)
+       , new = paste0(rep(c("A", "C", "E", "N", "O"), each = 1), rep(1:3, times = 5))) 
+wmat <- ega_ind$dynEGA$ID143$network
+colnames(wmat) <- tnames$new; rownames(wmat) <- tnames$new
+
+# first, we need to make a list of the cluster membership
+tmp <- ega_ind$dynEGA$ID143$dim.variables %>% 
+  mutate(items = mapvalues(items, tnames$old, tnames$new)) %>%
+  group_by(dimension) %>% 
+  nest() %>% 
+  ungroup()
+mem_list <- tmp$data; names(mem_list) <- tmp$dimension
+cols <- RColorBrewer::brewer.pal(length(mem_list), "Set3")
+
+g <- qgraph(
+  wmat
+  , color = cols # color based on cluster
+  , layout = "spring" # force directed algorithm
+  , border.width = 4 # width of the border around nodes
+  , vsize = 10 # size of the nodes
+  , label.font = 2 # make the font bold
+  , label.fill.vertical = 1 # make sure we use all our space for labels
+  , negDashed = T # dash negative edges
+  , edge.color = "black" # make edges black 
+  , edge.labels = T # label the edges
+)
+plot(g)
+title("ID143")
+```
+
+We can also make this a more flexible function and do it for everyone!  
+```{r ega plot fun}
+tnames <- tibble(old = rownames(ega_ind$dynEGA$ID143$network)
+       , new = paste0(rep(c("A", "C", "E", "N", "O"), each = 1), rep(1:3, times = 5))) 
+
+ega_qgraph_fun <- function(obj, id){
+  # now let's wrangle the names of the labels 
+  wmat <- obj$network
+  colnames(wmat) <- tnames$new; rownames(wmat) <- tnames$new
+  
+  # first, we need to make a list of the cluster membership
+  tmp <- obj$dim.variables %>% 
+    mutate(items = mapvalues(items, tnames$old, tnames$new)) %>%
+    group_by(dimension) %>% 
+    nest() %>% 
+    ungroup()
+  mem_list <- tmp$data; names(mem_list) <- tmp$dimension
+  cols <- RColorBrewer::brewer.pal(9, "Set3")[1:length(mem_list)]
+  
+  g <- qgraph(
+    wmat
+    , color = cols # color based on cluster
+    , layout = "spring" # force directed algorithm
+    , border.width = 4 # width of the border around nodes
+    , vsize = 10 # size of the nodes
+    , label.font = 2 # make the font bold
+    , label.fill.vertical = 1 # make sure we use all our space for labels
+    , negDashed = T # dash negative edges
+    , edge.color = "black" # make edges black 
+    , edge.labels = T # label the edges
+    , mar = c(4,4,5,4) # margins
+  )
+  title(id, line = 3)
+}
+
+par(mfrow = c(3,4))
+tibble(
+  SID = names(ega_ind$dynEGA)
+  , network = ega_ind$dynEGA
+  ) %>%
+  mutate(plot = map2(network, SID, ega_qgraph_fun))
+```
+
+
+# Exercise 5: Variance Decomposition with MLM
+
+```{r e3 data}
+dat3 <- read_csv(url(sprintf("%s/ESM-structure/blob/main/02-data/02-facet-wide/02-imputed/facet_wide_imp.csv?raw=true", wd))) %>%
+  group_by(SID) %>%
+  mutate_at(vars(-Full_Date, -all_beeps), lst(lag = lag)) %>%
+  ungroup()
+```
+
+
+## Unconditional Model  
+Level 1:  
+$Y_{it} = \beta_{0i} + \epsilon_{it}$  
+Level 2:  
+$\beta_{0i} = \mu_{00} + u_{0i}$  
+
+, where $\beta_{0i}$ is the average value of $Y$ for person $i$ across all observations $t$, $\mu_{00}$ is the average value of $Y$ across the full sample, and $u_{0i}$ is the deviation from the average value of the sample for person $i$ across all time points $t$.  
+
+And the $\tau$ matrix is summarized by a single cell, $\tau_{00}^2$ and $\sigma^2$ is the squared residuals, $\epsilon_{it}$.  
+
+```{r uncond mod}
+# run the model 
+mod0 <- lmer(agreeableness_Compassion ~ 1 + (1 | SID), data = dat3)
+# get model term summaries
+tidy(mod0, conf.int = T)
+# examine the Variance-Covariance matrix  
+VarCorr(mod0)
+# Groups = SID = tau^2
+# Residual = sigma^2
+```
+
+### ICC  
+
+The intraclass correlation captures the ratio of level 2 units (in this case person-means) to the total variance both across people and within each person: 
+
+$\frac{\tau_{00}^2}{\tau_{00}^2 + \sigma^2}$  
+
+```{r calc ICC}
+vc <- VarCorr(mod0) %>% as.data.frame(); vc
+
+icc <- vc$vcov[1] / (vc$vcov[1] + vc$vcov[2]); icc
+```
+
+### Distributions  
+My hot take is that MLM's should never be run without including either all estimates of level 2 units or a distribution of all of those estimates. We'll do the latter here.  
+```{r m0 dist}
+coef(mod0)$SID %>%
+  ggplot(aes(x = `(Intercept)`)) + 
+  geom_histogram(aes(y = ..density..), fill = "lightgrey", color = "black") + 
+  geom_density(color = "blue", size = 1) + 
+  labs(x = "Agreeableness: Compassion Person-Mean"
+       , y = "Density"
+       , title = "Distribution of Level 2 Units") + 
+  theme_classic() + 
+  theme(plot.title = element_text(hjust = .5, face = "bold"))
+```
+
+
+## Conditional Model  
+Conditional model just means that we are adjusting the variance decomposition by adding some covariate to the model. In this case, let's look at autoregresion, or using previous time point $y$ to predict next time point $y$.  
+Level 1:  
+$Y_{it} = \beta_{0i} + \beta_{1i}*X_{it} + \epsilon_{it}$  
+Level 2:  
+$\beta_{0i} = \mu_{00} + u_{0i}$  
+$\beta_{0i} = \mu_{10} + u_{1i}$  
+
+, where:  
+
+- $\beta_{0i}$ is the average value of $Y$ for person $i$ across all observations $t$  
+- $\beta_{1i}$ is the autoregressive relationship of $Y$ for person $i$ across all observations $t$  
+- $\mu_{00}$ is the average value of $Y$ across the full sample  
+- $\mu_{10}$ is the average autoregressive relationship of $Y$ across the full sample  
+- $u_{0i}$ is the deviation from the average value of the sample for person $i$ across all time points $t$.  
+- $u_{1i}$ is the deviation from the average autoregressive relationship for person $i$ across all time points $t$.  
+
+```{r calc conditional model}
+mod1 <- lmer(agreeableness_Compassion ~ 1 + agreeableness_Compassion_lag + ( 1 + agreeableness_Compassion_lag | SID)
+             , data = dat3); mod1
+
+td1 <- tidy(mod1, conf.int = T); td1
+```
+
+There was a small carry-over association between previous and current time point compassion ($\mu_{10}$ = 0.05, 95% CI = [0.02, 0.08]).  
+
+### Distributions  
+Here, we need to plot two random effects, the average level and teh average lagged association.  
+```{r m1 dist}
+coef(mod1)$SID %>% 
+  rownames_to_column("id") %>%
+  pivot_longer(
+    cols = -id
+    , names_to = "term"
+    , values_to = "est"
+  ) %>%
+  mutate(term = mapvalues(term, c("(Intercept)", "agreeableness_Compassion_lag"), c("Person-Mean Compassion", "Person-Specific Lagged Association"))) %>%
+  ggplot(aes(x = est)) + 
+  geom_histogram(aes(y = ..density..), fill = "lightgrey", color = "black") + 
+  geom_density(color = "blue", size = 1) + 
+  facet_grid(~term, scales = "free") + 
+  labs(x = "Empirical Bayes Estimate"
+       , y = "Density"
+       , title = "Distribution of Level 2 Units") + 
+  theme_classic() + 
+  theme(plot.title = element_text(hjust = .5, face = "bold"))
+```
+
+## Add Time-Varying Covariate / Predictor  
+
+Level 1:  
+$Y_{it} = \beta_{0i} + \beta_{1i}*y_{it-1} + \beta_{2i}*X_{it} + \epsilon_{it}$  
+Level 2:  
+$\beta_{0i} = \mu_{00} + u_{0i}$  
+$\beta_{1i} = \mu_{10} + u_{1i}$  
+$\beta_{2i} = \mu_{20} + u_{1i}$  
+
+, where:  
+
+- $\mu_{00}$ = average level of $Y$ across people $i$ and time points $t$.   
+- $\mu_{10}$ is the average autoregressive relationship of $Y$ across the full sample.  
+- $\mu_{20}$ = average association between $X$ and $Y$ across the full sample.  
+- $\beta_{0i}$ = average levels of $Y$ for person $i$.  
+- $\beta_{1i}$ is the autoregressive relationship of $Y$ for person $i$ across all observations $t$.  
+- $\beta_{2i}$ = average assocation between $X$ and $Y$ for person $i$ across time points $t$.  
+- $u_{0i}$ = deviations from average levels of $Y$ for person $i$.  
+- $u_{1i}$ is the deviation from the average autoregressive relationship for person $i$ across all time points $t$.  
+- $u_{2i}$ is the deviation from the average $XY$ association for person $i$ across all time points $t$.  
+
+```{r add level 2 covariate}
+mod2 <- lmer(agreeableness_Compassion ~ 1 + agreeableness_Compassion_lag  + extraversion_Sociability +
+               ( 1 + agreeableness_Compassion_lag + extraversion_Sociability | SID)
+             , data = dat3); mod2
+
+td2 <- tidy(mod2, conf.int = T); td2
+```
+
+There was a concurrent association between sociability and compassion, even when accounting for previous compassion ($\mu_{20}$ = 0.12, 95% CI [0.10, 0.15]). Moreover, even when accounting for concurrent sociability, the carry-over association of compassion remained ($\mu_{10} = 0.05, 95% CI [0.02, 0.08]).  
+
+### Distributions  
+Here, we need to plot three random effects, the average level, the average lagged association, the sociability-compassion association.  
+
+```{r m2 dist}
+coef(mod2)$SID %>% 
+  rownames_to_column("id") %>%
+  pivot_longer(
+    cols = -id
+    , names_to = "term"
+    , values_to = "est"
+  ) %>%
+  mutate(term = mapvalues(term, c("(Intercept)", "agreeableness_Compassion_lag", "extraversion_Sociability")
+                   , c("Person-Mean Compassion", "Person-Specific Lagged Association", "Person-Specific\n Sociability-Compassion Association"))) %>%
+  ggplot(aes(x = est)) + 
+  geom_histogram(aes(y = ..density..), fill = "lightgrey", color = "black") + 
+  geom_density(color = "blue", size = 1) + 
+  facet_grid(~term, scales = "free") + 
+  labs(x = "Empirical Bayes Estimate"
+       , y = "Density"
+       , title = "Distribution of Level 2 Units") + 
+  theme_classic() + 
+  theme(plot.title = element_text(hjust = .5, face = "bold"))
+```
+
+## Add Time-Invariant Covariate / Predictor  
+Level 1:  
+$Y_{it} = \beta_{0i} + \beta_{1i}*(X_{it}-\bar{X}_{i}) + \epsilon_{it}$  
+Level 2:  
+$\beta_{0i} = \mu_{00} + \mu_{01}*(\bar{X}_{i} - \bar{X}) + u_{0i}$  
+$\beta_{1i} = \mu_{10} + \mu_{11}*(\bar{X}_{i} - \bar{X}) + u_{1i}$  
+
+, where:  
+
+- $\mu_{10}$ = average change in $Y$ as a function of deviations from within-person averages of $X$ across people $i$ and time points $t$.  
+- $\mu_{01}$ = average change in $Y$ as a function of between person differences in average levels of $X$ across people $i$ and time points $t$.  
+- $\mu_{11}$ = average change in $Y$ as a function of both within-person deviations from person-level means and between-person differences average levels of $X$ across people $i$ and time points $t$.  
+- $\beta_{0i}$ = average levels of $Y$ for person $i$ across time points $t$.  
+- $\beta_{1i}$ = average change in $Y$ as a function of within-person deviations in $X$ for person $i$ across time points $t$.  
+- $u_{0i}$ = deviations from average levels of $Y$ for person $i$ across time points $t$.  
+- $u_{1i}$ = deviations in change in $Y$ as a function of deviations in within-person levels of $X$ for person $i$ across time points $t$.  
+
+```{r add level 1 covariate}
+dat3a <- dat3 %>% 
+  # keep only necessary variables
+  select(SID, all_beeps, agreeableness_Compassion, agreeableness_Compassion_lag, extraversion_Sociability, all_beeps) %>%
+  # group by person to get person-specific means
+  group_by(SID) %>%
+  # person-mean centered sociability -- used in model
+  mutate(extraversion_Sociability_c = extraversion_Sociability - mean(extraversion_Sociability, na.rm = T)
+  # person average sociability -- not used in model
+         , extraversion_Sociability_m = mean(extraversion_Sociability, na.rm = T)) %>%
+  ungroup() %>%
+  # grand mean centered person means -- used in model
+  mutate(extraversion_Sociability_gmc = extraversion_Sociability_m - mean(extraversion_Sociability_m))
+
+# run the model
+mod3 <- lmer(agreeableness_Compassion ~ 1 + extraversion_Sociability_c + extraversion_Sociability_gmc + extraversion_Sociability_c:extraversion_Sociability_gmc + 
+               (1 + extraversion_Sociability_c | SID), data = dat3a); mod3
+
+td3 <- tidy(mod3, conf.int = T); td3
+```
+
+Higher sociability than usual for an individual is associated with more compassion, on average ($\mu_{10}$ = 0.11, 95% CI [0.10, 0.13]). People with higher sociability, on average, were also more compassionate ($\mu_{01}$ = 0.36, 95% CI [0.28, 0.45]). Finally, there was interaction between average sociability and deviations of sociability ($\mu_{11}$ = 0.06, 95% CI [0.02, 0.10]), such that for individuals who were higher in sociability than others, they were even more compassionate when they were more sociable than usual relative to individuals lower in sociability than others.   
+
+### Distributions  
+Here, we need to plot two random effects, the average level and the association between deviations from person-means in sociability and deviations in compassion.  
+```{r m3 dist}
+coef(mod3)$SID %>% 
+  rownames_to_column("id") %>%
+  select(-extraversion_Sociability_gmc, -`extraversion_Sociability_c:extraversion_Sociability_gmc`) %>%
+  pivot_longer(
+    cols = -id
+    , names_to = "term"
+    , values_to = "est"
+  ) %>%
+  mutate(term = mapvalues(term, c("(Intercept)", "extraversion_Sociability_c"), c("Person-Mean Compassion", "Person-Specific Sociability-Compassion Association"))) %>%
+  ggplot(aes(x = est)) + 
+  geom_histogram(aes(y = ..density..), fill = "lightgrey", color = "black") + 
+  geom_density(color = "blue", size = 1) + 
+  facet_grid(~term, scales = "free") + 
+  labs(x = "Empirical Bayes Estimate"
+       , y = "Density"
+       , title = "Distribution of Level 2 Units") + 
+  theme_classic() + 
+  theme(plot.title = element_text(hjust = .5, face = "bold"))
+```
+
+## Growth Models  
+### Data  
+These data come from the National Longitudinal Studies of Youth, Children and Young Adults Sample and were used in Bollich, Beck, Hill, and Jackson (2021) to estimate trajectories of four individual difference characteristics depending on whether adolescents had contact with the criminal justice system or not. 
+
+```{r e3 growth data}
+load(url("https://github.com/emoriebeck/R-tutorials/blob/master/11-ggplot-p3-mlm/data/sample.RData?raw=true"))
+sample_dat
+```
+
+At its simplest, a growth model is just a basic MLM with a time-varying covariate (where the time-varying covariate is itself time).  
+Level 1:  
+$Y_{it} = \beta_{0i} + \beta_{1i}*time_{it} + \epsilon_{it}$  
+Level 2:  
+$\beta_{0i} = \mu_{00} + u_{0i}$  
+$\beta_{1i} = \mu_{10} + u_{1i}$  
+
+, where:  
+
+- $\mu_{10}$ = average change in $Y$ as a function of deviations from within-person averages of $X$ across people $i$ and time points $t$.  
+- $\beta_{0i}$ = average levels of $Y$ for person $i$ at time 0.  
+- $\beta_{1i}$ = average slope / change in $Y$ for person $i$ across time points $t$.  
+- $u_{0i}$ = deviations from average levels of $Y$ at wave 0 for person $i$.  
+- $u_{1i}$ = deviations in slope / change in $Y$ for person $i$ across time points $t$.  
+
+```{r add time covariate}
+mod4 <- lmer(CESD ~ 1 + age0 + ( 1 + age0 | PROC_CID), data = sample_dat); mod4
+
+td4 <- tidy(mod4, conf.int = T); td4
+```
+
+Overall, there was no significant change in Sensation Seeking across adolescence ($\mu_{10}$ = 0.007, 95% CI [-0.0003, 0.02]).  
+
+### Distributions  
+Here, we need to plot two random effects, the average level at age 14 and the slope.  
+
+```{r m4 dist}
+coef(mod4)$PROC_CID %>% 
+  rownames_to_column("id") %>%
+  pivot_longer(
+    cols = -id
+    , names_to = "term"
+    , values_to = "est"
+  ) %>%
+  mutate(term = mapvalues(term, c("(Intercept)", "age0")
+                   , c("CESD at Age 14", "Person-Specific Slope"))) %>%
+  ggplot(aes(x = est)) + 
+  geom_histogram(aes(y = ..density..), fill = "lightgrey", color = "black") + 
+  geom_density(color = "blue", size = 1) + 
+  facet_grid(~term, scales = "free") + 
+  labs(x = "Empirical Bayes Estimate"
+       , y = "Density"
+       , title = "Distribution of Level 2 Units") + 
+  theme_classic() + 
+  theme(plot.title = element_text(hjust = .5, face = "bold"))
+```
+
+## Mega-Analysis  
+At its most basic form, a mega-analysis is just a basic multilevel model with a Level 1 covariate. The difference is that it's no longer observations across time nested within people. Instead its people nested within samples with samples as the grouping variable.  
+
+Level 1:  
+$Y_{is} = \beta_{0s} + \beta_{2s}*X_{is} + \epsilon_{is}$  
+Level 2:  
+$\beta_{0i} = \gamma_{00} + u_{0i}$  
+$\beta_{1s} = \gamma_{10} + u_{1s}$  
+
+, where:  
+
+- $\gamma_{00}$ = average level of $Y$ across people $i$ and samples $t$.   
+- $\gamma_{10}$ = average association between $X$ and $Y$ across all samples (the "mega-analytic" association).  
+- $\beta_{0s}$ = average levels of $Y$ for sample $s$.  
+- $\beta_{1s}$ = average association between $X$ and $Y$ for sample $s$ across people $i$.  
+- $u_{0s}$ = deviations from average levels of $Y$ for sample $s$.  
+- $u_{1s}$ is the deviation from the average $XY$ association for sample $s$ across all people $i$.  
+
+### Data  
+These data come from a yet-unpublished project examining 8 methods for synthesizing data via individual-participants meta-analysis, including meta-analysis. The data come from many samples, but all information on those samples has been scrubbed from the data we'll be using and it will only be a relatively small sub-sample of the population (500 from each sample). Specifically, this data set examines the association bewteen Conscientiousness and episodic memory across 10 samples.    
+
+```{r mega data}
+load(url("https://github.com/emoriebeck/R-tutorials/blob/master/99_archive/sample-mega-analysis.RData?raw=true"))
+d
+```
+
+```{r add study covariate}
+mod5 <- lmer(o_value ~ 1 + p_value + ( 1 + p_value | study), data = d); mod5
+
+td5 <- tidy(mod5, conf.int = T); td5
+```
+
+Overall, there was a significant association between Conscientiousness and Episodic Memory across samples ($\gammau_{10}$ = 0.10, 95% CI [0.02, 0.18]).  
+
+### Distributions  
+Rather than distributions, we are going to look at forest plots of the intercepts and personality-outcome associations because this is more typical in meta/mega-analysis.
+
+```{r m5 dist}
+fp_dat <- coef(mod5)$study %>%
+      data.frame() %>%
+      rownames_to_column("study") %>%
+      mutate(term = "estimate") %>%
+      full_join(
+        parameters::standard_error(mod5, effects = "random")$study %>%
+          data.frame() %>%
+          rownames_to_column("study") %>%
+          mutate(term = "SE")) %>%
+      rename(Intercept = X.Intercept.) %>%
+      # select(study, term, , p_value) %>%
+      pivot_longer(c(-study, -term), names_to = "names", values_to = "estimate") %>%
+      pivot_wider(names_from = "term", values_from = "estimate") %>% 
+      rename(term = names) %>%
+      mutate(conf.low = estimate - 2*SE, conf.high = estimate + 2*SE,
+             term = ifelse(grepl("p_value.", term), str_replace_all(term, "p_value.", "p_value:"), term)) %>%
+  full_join(
+    td5 %>% 
+      filter(effect == "fixed") %>% 
+      select(term, estimate, conf.low, conf.high) %>% 
+      mutate(study = "Overall", term = str_replace(term, "\\(Intercept\\)", "Intercept"))
+  )
+
+## arrange by effect size
+std_levs <- (fp_dat %>% 
+  filter(study != "Overall" & term == "p_value") %>%
+  arrange(estimate))$study
+
+fp_dat %>%
+  filter(term == "p_value") %>%
+  mutate(study = factor(study, c("Overall", std_levs))) %>%
+  ggplot(aes(x = study, y = estimate)) + 
+  geom_errorbar(aes(ymin = conf.low, ymax = conf.high)
+             , position = "dodge"
+             , width = .1) + 
+  geom_hline(aes(yintercept = 0), linetype = "dashed", size = .7) +
+  geom_point() + 
+  coord_flip() +
+  theme_classic() 
+```
+
+Honestly, this isn't a super-satisfactory forest plot, but much better examples can be found at https://github.com/emoriebeck/data-synthesis-tutorial and seen on https://emoriebeck.shinyapps.io/data-synthesis-tutorial.  
+
+# Miscellaneous  
+## Fake Data for EGA Slides  
+```{r ega slides}
+id <- rep(1, 16)
+x1 <- c(3, 2, 3, 3, 2, 5, 4, 5, 2, 4, 4, 3, 4, 2, 2, 4)
+x2 <- c(3, 2, 1, 4, 3, 4, 3, 2, 3, 2, 3, 2, 4, 2, 1, 3)
+x3 <- c(4, 1, 1, 4, 3, 1, 2, 4, 3, 3, 2, 3, 1, 2, 1, 0)
+x4 <- c(3, 4, 3, 3, 3, 4, 1, 4, 2, 1, 4, 2, 4, 4, 2, 4)
+x5 <- c(3, 2, 4, 3, 3, 1, 2, 3, 3, 3, 0, 2, 4, 3, 2, 4)
+x <- cbind(x1, x2, x3, x4, x5)
+
+r <- round(apply(x, 2, function(i) glla(i, n.embed = 5, tau = 1, delta = 4, order = 1)[,2]), 2)
+g <- qgraph(cor_auto(r)
+            , layout = "spring"
+            , graph = "glasso"
+            , sampleSize = 100
+            , color = c("#302ef9", "#ec7d32", "#ffbf00", "#00b050", "#70309f")
+            , vsize = 15
+            , border.width = 4
+            # , labels = c("x_1*", "delta x1*", "delta x1*", "delta x1*", "delta x1*")
+            , label.color = "white"
+            , label.font = 2
+            , label.fill.vertical = 1
+            , edge.color = "black")
+g$graphAttributes$Edges$lty[g$Edgelist$weight < 0] <- 2
+# png(filename = "~/Downloads/plot.png", width = 1000, height = 1000)
+plot(g)
+# dev.off()
+pr <- getWmat(g)
+
+x <- as.data.frame(cbind(id, x1, x2, x3, x4, x5))
+dx <- dynEGA(x, n.embed = 5, level = "individual", model = "glasso", id = 1, delta = 4, order = 1)
+```
