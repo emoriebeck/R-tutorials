@@ -17,7 +17,7 @@ editor_options:
 ---
 
 ```{r, echo = F}
-knitr::opts_chunk$set(echo = FALSE, message = F, warning = F, error = F)
+knitr::opts_chunk$set(echo = T, message = F, warning = F, error = F)
 ```
 
 

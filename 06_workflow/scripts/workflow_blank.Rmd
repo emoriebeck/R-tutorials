@@ -17,7 +17,7 @@ editor_options:
 ---
 
 ```{r, echo = F}
-knitr::opts_chunk$set(echo = FALSE, message = F, warning = F, error = F)
+knitr::opts_chunk$set(echo = TRUE, message = F, warning = F, error = F)
 ```
 
 
@@ -122,7 +122,7 @@ Below, I will demonstrate each of these.
 Below, I'll load in the codebook we will use for this study, which will include all of the above columns. 
 ```{r codebook}
 # set the path
-wd <- "https://github.com/emoriebeck/R-tutorials/blob/master/wustl_r_workshops/workflow"
+wd <- "https://github.com/emoriebeck/R-tutorials/blob/master/06_workflow"
 
 download.file(
   url      = sprintf("%s/data/codebook.csv?raw=true", wd), 
