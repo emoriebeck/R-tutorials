@@ -156,7 +156,7 @@ df1 <- tibble(
 The code above creates a list of ID's from the data path (files named for each person), reads the data in using the `map()` function from `purrr`, removes the ".csv" from the ID variable, then unnests the data, resulting in a data frame for each person.  
 
 # List Columns and the Power of `purrr`  
-On the previous slide, we saw a data frame **inside** of a data frame. This is called a list column within a nested data frame.  
+Above, we saw a data frame **inside** of a data frame. This is called a list column within a nested data frame.  
 
 In this case, we created a list column using map, but one of the best things about `purrr` is how it combines with the `nest()` and `unnest()` functions from the `tidyr` package.  
 

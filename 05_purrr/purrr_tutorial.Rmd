@@ -5,10 +5,10 @@ output:
   html_document:
     theme: united
     highlight: tango
-    df_print: paged
-    code_folding: show
+    df-print: paged
+    code-folding: show
     toc: true
-    toc_float: true
+    toc-float: true
 ---
 
 ```{r setup, include=FALSE}
@@ -382,3 +382,50 @@ plot_fun <- function(df, outcome){
 do.call("grid.arrange", list(grobs = plots$plot, nrow = 1))
 ```
 
+# Exercise: Reading in Subject-Level Data  
+
+```{r codebook}
+# data_path <- "~/Desktop/purrr"
+codebook <- sprintf("%s/data/codebook_ex1.csv", data_path) %>% read_csv(.)
+codebook
+```
+
+Now, we're going to combine with what we learned about last time with codebooks.  
+
+Now, that we have a codebook, what are the next steps?  
+1. pull old names in raw data from codebook  
+2. pull new names from codebook  
+3. select columns from codebook in loaded data  
+4. rename columns with new names  
+
+# Exercise: Reading in Subject-Level Data  
+```{r read data complex ex1, eval = T}
+old.names <- codebook$old_name # pull old names in raw data from codebook  
+new.names <- codebook$new_name # pull new names from codebook  
+df1 <- tibble(
+  ID = list_files_github() %>% str_remove_all(., "05_purrr/data/example_1") %>% str_remove_all(., "[a-z A-Z_.//]")
+  ) %>%
+  mutate(data = map(ID, ~read_csv(sprintf("%s/data/example_1/%s.csv", data_path, .)))) %>%
+  unnest(data) %>%
+  select(ID, count, one_of(old.names)) %>% # select columns from codebook in loaded data  
+  setNames(c("ID", "count", new.names)) # rename columns with new names  
+df1
+```
+
+
+## Descriptives: Within-Person Correlations  
+With these kinds of data, the first thing, we may want to do is look at within-person correlations, which we can do with `purrr`.  
+
+```{r}
+nested.r <- df1 %>%
+  group_by(ID) %>%
+  nest() %>%
+  mutate(r = map(data, ~cor((.) %>% select(-count), use = "pairwise")))
+nested.r
+```
+
+We can access it like a list: 
+
+```{r}
+nested.r$data[[1]]
+```
